@@ -26,6 +26,7 @@ export default function OpenScrollApp() {
     return () => window.clearTimeout(task);
   }, []);
   useEffect(() => { document.documentElement.lang = locale; document.documentElement.dir = directionFor(locale); }, [locale]);
+  useEffect(() => { document.documentElement.dataset.hydrated = "true"; return () => { delete document.documentElement.dataset.hydrated; }; }, []);
   useEffect(() => { const resolved = theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme; document.documentElement.dataset.theme = resolved; }, [theme]);
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(""), 1800); return () => clearTimeout(timer); } }, [toast]);
   function save(next = {}) { localStorage.setItem(PREFERENCE_KEY, JSON.stringify({ interest: interest.trim(), topics: [...selected], locale, theme, ...next })); }
