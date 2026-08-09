@@ -1,48 +1,15 @@
-import { Bookmark, Compass, Layers3, SlidersHorizontal } from "lucide-react";
+"use client";
+import { Compass, Languages, Moon, Search, Settings, Sun } from "lucide-react";
+import { IconButton } from "./primitives";
 
-const navItems = [
-  { label: "Scrolls", icon: Layers3 },
-  { label: "Explore", icon: Compass },
-  { label: "Saved", icon: Bookmark },
-  { label: "Settings", icon: SlidersHorizontal }
-];
-
-function Navigation({ compact = false }) {
-  return (
-    <nav className={compact ? "bottom-navigation" : "side-navigation"} aria-label="Primary navigation">
-      {navItems.map(({ label, icon: Icon }, index) => (
-        <button className="nav-item" aria-current={index === 0 ? "page" : undefined} key={label}>
-          <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
-          <span>{label}</span>
-        </button>
-      ))}
-    </nav>
-  );
-}
-
-export default function AppShell({ children, actions }) {
-  return (
-    <div className="app-shell">
-      <aside className="desktop-rail">
-        <a className="wordmark wordmark--vertical" href="#main-content" aria-label="OpenScroll home">
-          <span className="wordmark__mark" aria-hidden="true">O</span>
-          <span>OpenScroll</span>
-        </a>
-        <Navigation />
-        <p className="rail-note">Open knowledge.<br />Quietly explored.</p>
-      </aside>
-
-      <div className="app-column">
-        <header className="top-bar">
-          <a className="wordmark" href="#main-content" aria-label="OpenScroll home">
-            <span className="wordmark__mark" aria-hidden="true">O</span>
-            <span>OpenScroll</span>
-          </a>
-          <div className="top-bar__actions">{actions}</div>
-        </header>
-        <main id="main-content" tabIndex="-1">{children}</main>
-        <Navigation compact />
-      </div>
+export default function AppShell({ locale, theme, messages, feedMode, onLocale, onTheme, onSearch, children }) {
+  return <div className={`app-shell ${feedMode ? "app-shell--feed" : ""}`}>
+    {!feedMode ? <aside className="navigation-rail" aria-label="Primary"><span className="brand" aria-label="OpenScroll">O</span><IconButton label={messages.explore} expanded onClick={onSearch}><Compass aria-hidden="true"/></IconButton><IconButton label="Search" expanded onClick={onSearch}><Search aria-hidden="true"/></IconButton><IconButton label="Settings" expanded><Settings aria-hidden="true"/></IconButton></aside> : null}
+    <div className="app-region">
+      {!feedMode ? <header className="utility-bar"><span className="brand brand--mobile" aria-label="OpenScroll">O</span><div className="utility-actions"><label className="locale-select"><Languages aria-hidden="true"/><span className="sr-only">{messages.language}</span><select value={locale} onChange={(event) => onLocale(event.target.value)} aria-label={messages.language}><option value="en">EN</option><option value="es">ES</option><option value="ar">AR</option></select></label><IconButton label={messages.theme} onClick={onTheme}>{theme === "dark" ? <Sun aria-hidden="true"/> : <Moon aria-hidden="true"/>}</IconButton></div></header> : null}
+      <div className="content-region">{children}</div>
+      {!feedMode ? <nav className="bottom-nav" aria-label="Primary"><IconButton label={messages.explore} expanded onClick={onSearch}><Compass aria-hidden="true"/></IconButton><IconButton label="Search" expanded onClick={onSearch}><Search aria-hidden="true"/></IconButton><IconButton label="Settings" expanded><Settings aria-hidden="true"/></IconButton></nav> : null}
     </div>
-  );
+    {!feedMode ? <aside className="context-region" aria-label="Context"><span aria-hidden="true">○</span></aside> : null}
+  </div>;
 }
