@@ -68,6 +68,7 @@ export default function FoundationShowcase() {
         button { color: inherit; }
         .journey { min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
         .screen { min-height: 100vh; min-height: 100dvh; display: grid; align-content: center; width: min(calc(100% - 36px), 760px); margin: auto; padding: max(48px, env(safe-area-inset-top)) 0 max(48px, env(safe-area-inset-bottom)); }
+        .screen--opening { isolation: isolate; }
         .screen--feed { display: block; width: 100%; height: 100vh; height: 100dvh; min-height: 0; padding: 0; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior-y: contain; scrollbar-width: none; }
         .mark { position: fixed; z-index: 8; top: max(24px, env(safe-area-inset-top)); left: max(24px, env(safe-area-inset-left)); display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #738474; border-radius: 50%; font: italic 21px Georgia, serif; color: #34553e; }
         h1 { margin: 0 0 42px; text-align: center; font: 400 clamp(42px, 8vw, 72px)/.98 Georgia, serif; letter-spacing: -.055em; }
@@ -88,7 +89,6 @@ export default function FoundationShowcase() {
         .feed-card { position: relative; display: grid; align-items: end; min-height: 100vh; min-height: 100dvh; overflow: hidden; color: white; background: #1e2821; scroll-snap-align: start; scroll-snap-stop: always; }
         .feed-art { position: absolute; inset: 0; display: grid; place-items: center; color: white; }
         .feed-card-content { position: relative; z-index: 1; padding: 120px 24px max(34px, calc(env(safe-area-inset-bottom) + 22px)); background: linear-gradient(transparent, rgb(0 0 0 / 76%)); }
-        .feed-type { margin: 0 0 8px; color: rgb(255 255 255 / 76%); font-size: 11px; font-weight: 700; letter-spacing: .14em; }
         .feed-card h2 { margin: 0 0 18px; font: 400 30px/1.08 Georgia, serif; letter-spacing: -.03em; }
         .feed-source { color: rgb(255 255 255 / 76%); font-size: 13px; }
         .screen--feed::-webkit-scrollbar { display: none; }
@@ -99,6 +99,23 @@ export default function FoundationShowcase() {
             width: min(calc(100% - 28px), 520px);
             padding-top: max(88px, calc(env(safe-area-inset-top) + 72px));
             padding-bottom: max(24px, env(safe-area-inset-bottom));
+          }
+          .screen--opening {
+            align-content: stretch;
+            grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+            width: min(calc(100% - 32px), 480px);
+            padding-top: max(76px, calc(env(safe-area-inset-top) + 60px));
+            padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px));
+          }
+          .screen--opening h1 {
+            align-self: end;
+            grid-row: 1;
+            width: min(100%, 330px);
+            margin: 0 auto 30px;
+          }
+          .screen--opening .search {
+            grid-row: 2;
+            width: 100%;
           }
           .mark { top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); width: 40px; height: 40px; }
           h1 { max-width: 340px; margin: 0 auto 28px; font-size: clamp(38px, 12vw, 54px); }
@@ -116,6 +133,8 @@ export default function FoundationShowcase() {
         }
         @media (max-width: 360px), (max-height: 620px) {
           .screen:not(.screen--feed) { padding-top: max(70px, calc(env(safe-area-inset-top) + 58px)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+          .screen--opening { padding-top: max(64px, calc(env(safe-area-inset-top) + 52px)); }
+          .screen--opening h1 { margin-bottom: 22px; font-size: 38px; }
           h1 { margin-bottom: 22px; font-size: 38px; }
           .topic { min-height: 92px; padding-block: 12px; }
           .topic svg:not(.check) { width: 28px; height: 28px; }
@@ -131,14 +150,13 @@ export default function FoundationShowcase() {
       {step !== 2 && <span className="mark" aria-label="OpenScroll">O</span>}
 
       {step === 0 && (
-        <section className="screen" aria-labelledby="explore-title">
+        <section className="screen screen--opening" aria-labelledby="explore-title">
           <h1 id="explore-title">What do you want to explore?</h1>
           <form className="search" onSubmit={chooseInterest}>
             <Search size={22} aria-hidden="true" />
             <label htmlFor="interest" className="sr-only">Interest</label>
             <input
               id="interest"
-              autoFocus
               value={interest}
               onChange={(event) => setInterest(event.target.value)}
               placeholder="Morocco"
@@ -185,7 +203,6 @@ export default function FoundationShowcase() {
                 {index === 0 ? <Music2 size={64} strokeWidth={1.2} /> : index === 1 ? <Languages size={64} strokeWidth={1.2} /> : <BookOpen size={64} strokeWidth={1.2} />}
               </div>
               <div className="feed-card-content">
-                <p className="feed-type">{card.type}</p>
                 <h2>{card.title}</h2>
                 <span className="feed-source">{card.source}</span>
               </div>
