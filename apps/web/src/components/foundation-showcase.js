@@ -66,13 +66,14 @@ export default function FoundationShowcase() {
         body { background: #f5f1e8; color: #1e2821; font-family: Arial, Helvetica, sans-serif; }
         button, input { font: inherit; }
         button { color: inherit; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .journey { min-height: 100vh; min-height: 100dvh; overflow-x: clip; }
         .screen { min-height: 100vh; min-height: 100dvh; display: grid; align-content: center; width: min(calc(100% - 36px), 760px); margin: auto; padding: max(48px, env(safe-area-inset-top)) 0 max(48px, env(safe-area-inset-bottom)); }
         .screen--opening { isolation: isolate; }
         .screen--feed { display: block; width: 100%; height: 100vh; height: 100dvh; min-height: 0; padding: 0; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior-y: contain; scrollbar-width: none; }
         .mark { position: fixed; z-index: 8; top: max(24px, env(safe-area-inset-top)); left: max(24px, env(safe-area-inset-left)); display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #738474; border-radius: 50%; font: italic 21px Georgia, serif; color: #34553e; }
         h1 { margin: 0 0 42px; text-align: center; font: 400 clamp(42px, 8vw, 72px)/.98 Georgia, serif; letter-spacing: -.055em; }
-        .search { display: flex; align-items: center; gap: 12px; width: min(100%, 620px); margin: auto; padding: 10px 10px 10px 20px; border: 1px solid #cfc8b8; border-radius: 999px; background: #fffdf8; box-shadow: 0 18px 60px rgb(40 50 42 / 8%); }
+        .search { display: flex; align-items: center; gap: 12px; width: min(100%, 620px); min-width: 0; max-width: 100%; margin: auto; padding: 10px 10px 10px 20px; overflow: hidden; border: 1px solid #cfc8b8; border-radius: 999px; background: #fffdf8; box-shadow: 0 18px 60px rgb(40 50 42 / 8%); }
         .search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font-size: 18px; }
         .circle-button { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: #34553e; color: white; cursor: pointer; }
         .circle-button:disabled { opacity: .35; cursor: default; }
@@ -103,7 +104,9 @@ export default function FoundationShowcase() {
           .screen--opening {
             align-content: stretch;
             grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
-            width: min(calc(100% - 32px), 480px);
+            width: auto;
+            max-width: 480px;
+            margin-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
             padding-top: max(76px, calc(env(safe-area-inset-top) + 60px));
             padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px));
           }
