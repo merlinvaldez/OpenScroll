@@ -79,7 +79,7 @@ Use a four-item bottom navigation on mobile:
 | Layered scroll | Scrolls | Current and saved Scrolls |
 | Compass | Explore | Editorial and categorical discovery |
 | Bookmark | Saved | Saved objects and collections |
-| Person | Profile | Topics, languages, sources, history, settings |
+| Sliders | Settings | Topics, languages, sources, history, storage, accessibility |
 
 Search is a global action in the top-right or invoked by pull-down from major roots. It is not a fifth bottom-navigation item.
 
@@ -113,14 +113,14 @@ Avoid modal alerts for ordinary discovery actions.
 - One generous input line or capsule
 - Search/arrow icon as the only primary action
 - A quiet rotating line of examples beneath the field
-- Small profile/avatar control in the corner
+- Small settings/sliders control in the corner
 
 **Behavior:**
 
 - Focus the field immediately for a new user.
 - Accept topics, people, places, periods, languages, genres, and questions.
 - Resolve ambiguous terms in a compact choice sheet rather than a conversation.
-- No account wall before the first Scroll is previewed.
+- No registration, login, profile, or account prompt anywhere in the consumer experience.
 
 **Copy ceiling:** One prompt, one input hint, up to three examples. No onboarding carousel.
 
@@ -468,6 +468,62 @@ Hide, save, remove, and preference actions show a quiet reversible toast.
 
 Saved metadata and legally cacheable media remain available. Clearly distinguish unavailable remote media without blaming the user.
 
+## 12.1 Account-Free Local Continuity
+
+OpenScroll is free to open and free to Scroll. It has no consumer accounts. The product should feel persistent on a device without pretending local browser storage is a cloud backup.
+
+### What is saved locally
+
+- Scroll recipes, topic weights, and exclusions
+- Languages, media, depth, time, surprise, source, accessibility, and safety preferences
+- Saves, collections, and explicit feedback
+- Browsing history when the user leaves history enabled
+- Reading, listening, and viewing position
+- Small amounts of rights-safe offline metadata and media selected by the user
+
+### First-run disclosure
+
+Do not interrupt first exploration. After the first meaningful save or completed Scroll, show a quiet one-time sheet:
+
+> Saved on this device
+>
+> Your Scrolls and preferences stay in this browser. Clearing browser data removes them. You can export a backup anytime.
+
+Actions: **Got it** and **Export backup**.
+
+### Settings → Your data
+
+Provide:
+
+- Storage used
+- Browser persistence status
+- Export OpenScroll Data
+- Import OpenScroll Data
+- Clear history
+- Remove offline media
+- Reset preferences
+- Delete all local OpenScroll data
+
+Destructive actions show the exact affected categories and require confirmation. Export and clear actions must work without an account or email address.
+
+### Private browsing and blocked storage
+
+Scrolling remains available. If persistence is unavailable, show a compact status near Save:
+
+> This browser will not keep saves after you close it.
+
+Never repeatedly prompt or shame the user into changing browser settings.
+
+### Cross-device expectation
+
+Do not imply synchronization. When a user asks to move their setup, guide them to **Export** on one device and **Import** on the other. A future optional sync feature would be a separate product decision and must not quietly introduce accounts into 1.0.
+
+### Anonymous sharing
+
+Share begins with a confirmation sheet listing exactly what will leave the device. Only the selected Scroll recipe, collection, or item is published. Local history, other Scrolls, preferences, device data, and stable consumer identifiers are excluded.
+
+Shared Scrolls offer **Copy** and **Remix**, not Follow. The copied version becomes independent local browser data.
+
 ## 13. Responsive Behavior
 
 ### Mobile
@@ -523,6 +579,7 @@ Do not use:
 - Autoplay with sound
 - Engagement streaks, points, badges, or scarcity
 - Like counts, popularity counts, comments, or follower pressure
+- Login, sign-up, profile, recovery, or cloud-sync prompts
 - Floating explanatory paragraphs over media
 - Generic cards that make every medium look identical
 - Multiple competing accent colors
@@ -547,6 +604,8 @@ Test the following before visual polish is considered complete:
 8. Does the 25-item stopping point feel supportive rather than interruptive?
 9. Do Arabic and right-to-left flows feel native rather than mirrored afterthoughts?
 10. Does a cultural Scroll represent local voices and institutions visibly enough?
+11. Does a user understand that saves live on this device and know how to export them without the disclosure feeling alarming?
+12. Can a user recover gracefully when storage is full, blocked, cleared, corrupted, or temporary?
 
 ## 18. Design Acceptance Criteria
 
@@ -562,6 +621,8 @@ The design is ready for implementation when:
 - The session has a humane completion moment.
 - Light, dark, reduced-motion, dynamic-type, keyboard, screen-reader, and RTL states are specified.
 - The interface contains no social validation or compulsion mechanics.
+- Every consumer flow works without identity, registration, login, or cloud sync.
+- Local persistence, export/import, private browsing, quota, and data-loss states are fully designed.
 
 ## 19. Initial Prototype Scope
 
@@ -580,4 +641,3 @@ The prototype should use realistic open-source metadata and media references, no
 ## 20. Design North Star
 
 When OpenScroll is working, the user remembers the photograph, voice, map, manuscript, idea, or unexpected connection they discovered. They do not remember fighting the interface.
-
