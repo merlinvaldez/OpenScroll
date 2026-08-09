@@ -226,7 +226,7 @@ Exploring now preserves the user's place. Back returns to the exact originating 
 
 Double tap or bookmark saves instantly to **Saved**. A small reversible toast offers **Add to collection**.
 
-Collection creation requires only a name. Description, cover, collaborators, and sharing remain optional later actions.
+Collection creation requires only a name. Collections remain private to the browser. There are no collaborators, public collection pages, or publishing controls.
 
 ### 5.8 “Why this?”
 
@@ -518,11 +518,13 @@ Never repeatedly prompt or shame the user into changing browser settings.
 
 Do not imply synchronization. When a user asks to move their setup, guide them to **Export** on one device and **Import** on the other. A future optional sync feature would be a separate product decision and must not quietly introduce accounts into 1.0.
 
-### Anonymous sharing
+### Canonical-link sharing only
 
-Share begins with a confirmation sheet listing exactly what will leave the device. Only the selected Scroll recipe, collection, or item is published. Local history, other Scrolls, preferences, device data, and stable consumer identifiers are excluded.
+The Share action is available only on an existing verified-open source item or public OpenScroll topic page. It invokes the platform share sheet or copies that canonical URL.
 
-Shared Scrolls offer **Copy** and **Remix**, not Follow. The copied version becomes independent local browser data.
+It must never publish or transmit a user's Scroll, collection, annotations, preferences, history, generated arrangement, device identifier, or local database record. Scrolls and collections have **Export for backup**, not Share or Publish.
+
+There are no consumer uploads, posts, comments, creator profiles, public recipes, public collections, collaboration, following, or remixing of user-created material. OpenScroll editorial templates may be copied into a local Scroll, but consumer templates cannot be submitted to the platform.
 
 ## 13. Responsive Behavior
 
@@ -580,6 +582,8 @@ Do not use:
 - Engagement streaks, points, badges, or scarcity
 - Like counts, popularity counts, comments, or follower pressure
 - Login, sign-up, profile, recovery, or cloud-sync prompts
+- Upload, submit, publish, post, comment, collaborate, follow, or public-profile controls
+- Public Scrolls, public collections, user-created feeds, or user-submitted recommendation recipes
 - Floating explanatory paragraphs over media
 - Generic cards that make every medium look identical
 - Multiple competing accent colors
@@ -606,6 +610,7 @@ Test the following before visual polish is considered complete:
 10. Does a cultural Scroll represent local voices and institutions visibly enough?
 11. Does a user understand that saves live on this device and know how to export them without the disclosure feeling alarming?
 12. Can a user recover gracefully when storage is full, blocked, cleared, corrupted, or temporary?
+13. Can a user distinguish sharing a canonical source link from publishing personal material, and is publishing impossible from every consumer surface?
 
 ## 18. Design Acceptance Criteria
 
@@ -623,6 +628,7 @@ The design is ready for implementation when:
 - The interface contains no social validation or compulsion mechanics.
 - Every consumer flow works without identity, registration, login, or cloud sync.
 - Local persistence, export/import, private browsing, quota, and data-loss states are fully designed.
+- No consumer surface or flow permits user-generated content, public collections, public Scrolls, annotations, or publishing.
 
 ## 19. Initial Prototype Scope
 
