@@ -68,7 +68,8 @@ Every item must clearly disclose its source, creator when known, license, reason
 7. **Local perspective:** Country and culture Scrolls intentionally seek creators, languages, and institutions connected to the culture.
 8. **One world, many media:** Institutional differences disappear at the interaction layer while source identity remains intact.
 9. **User-controlled completion:** Sessions have humane stopping points and never rely on forced endlessness.
-10. **No consumer accounts:** Anyone can use OpenScroll immediately. Personal Scrolls, preferences, history, saves, and collections remain local to that browser unless the user deliberately exports or shares them.
+10. **No consumer accounts:** Anyone can use OpenScroll immediately. Personal Scrolls, preferences, history, saves, and collections remain local to that browser unless the user deliberately exports them for private backup or transfer.
+11. **No user-generated content:** Users cannot upload, author, submit, publish, distribute, or publicly display their own media, writing, annotations, collections, Scroll recipes, or generated artifacts through OpenScroll.
 
 ## 8. Scope of OpenScroll 1.0
 
@@ -83,8 +84,8 @@ Every item must clearly disclose its source, creator when known, license, reason
 - Explicit feed controls and semantic preference controls
 - Global search and editorial exploration
 - Locally saved Scrolls, preferences, history, saves, and collections
-- Deliberate Scroll, collection, and item sharing without consumer accounts
-- Copying and remixing shared Scroll recipes
+- Sharing canonical links to existing verified-open source items and public topic pages
+- Private local export/import for backup and device transfer
 - Source, rights, attribution, and recommendation transparency
 - Multilingual discovery, translation, and original-language access
 - Sensitive-content labeling and contextual notes
@@ -101,6 +102,7 @@ Every item must clearly disclose its source, creator when known, license, reason
 - Spotify or Apple Music playback without an independently open recording
 - Advertising-based behavioral profiling
 - Consumer registration, login, profiles, account recovery, or cloud synchronization
+- User uploads, posts, comments, annotations, public collections, public Scroll recipes, publishing tools, creator pages, or user-generated feeds
 - A creator social network, comments, follower counts, or public popularity contests
 - Final selection of the business model
 - A commitment that the application code itself will be open source
@@ -211,7 +213,7 @@ Each milestone must leave the shared architecture usable and tested by the next 
 
 ### North-star measure
 
-**Meaningful Discovery Rate:** the percentage of feed sessions in which a user explicitly saves, explores, shares, collects, or marks as valuable at least one previously unknown item across more than one medium.
+**Meaningful Discovery Rate:** the percentage of feed sessions in which a user explicitly saves, explores, collects, or marks as valuable at least one previously unknown item across more than one medium.
 
 ### Product measures
 
@@ -256,7 +258,7 @@ Time spent is diagnostic, not a primary success metric.
 | Foreign institutions dominate cultural Scrolls | Distorted representation | Measure and rank for local creators, languages, and institutions |
 | Breadth creates a noisy interface | Product loses calmness | Media-first layout, progressive disclosure, limited persistent controls |
 | Icon-first UI becomes ambiguous | Usability and accessibility failure | Standard icons, labels on first use and focus, accessible names, usability testing |
-| ShareAlike sources contaminate incompatible remixes | Rights conflicts | Track obligations at object and derivative level; block incompatible exports |
+| Downloaded or exported source material loses required attribution | Rights and trust failure | Bundle attribution and license data with every permitted source download or metadata export |
 | Source APIs change or fail | Broken feeds | Independent connectors, cached metadata, health states, fallback composition |
 | AI invents context or metadata | Misinformation | Field-level provenance, evaluation, source-authoritative display, correction tools |
 | Cross-source duplicates overwhelm users | Repetition | Canonical clusters, perceptual hashes, identifiers, semantic matching |
@@ -267,7 +269,7 @@ Time spent is diagnostic, not a primary success metric.
 OpenScroll 1.0 is releasable when:
 
 - A broad interest reliably becomes a useful, editable topic graph.
-- A user can build, consume, edit, save, share, and branch a Scroll.
+- A user can build, consume, edit, save locally, and branch a Scroll.
 - Rich interests yield a genuinely mixed-media session where eligible content exists.
 - Every main-feed object passes rights verification and exposes required provenance.
 - AI-generated and translated fields remain distinguishable and traceable.
@@ -291,7 +293,6 @@ OpenScroll 1.0 is releasable when:
 - Translation and AI-summary derivative-work policy
 - ShareAlike propagation across generated artifacts
 - Asset caching by source and rights class
-- Public licensing of user-created Scroll recipes
 - Formal method for measuring local perspective
 - Business model and institutional edition boundaries
 
@@ -366,9 +367,9 @@ Every ticket is complete only when:
 | OS-022 | **Implement the Open License Gate.** As a user, I should only see verified-open objects in the main Scroll. | Unknown, restricted, NC, ND, non-redistributable, and noncommercial candidates fail closed; decisions retain evidence, timestamp, and rule version. | OS-013, OS-021 |
 | OS-023 | **Build item-level source verification.** As the rights team, we need aggregators checked against authoritative source records. | Verification follows canonical source metadata or approved source rules; stale or conflicting evidence queues review; AI cannot approve rights. | OS-022 |
 | OS-024 | **Build rights-review queue.** As an administrator, I need to classify new and ambiguous licenses. | Reviewers can inspect evidence, approve/reject/escalate, version decisions, and apply an identical verified rule prospectively with audit logs. | OS-022, OS-071 |
-| OS-025 | **Build the Attribution Engine.** As a reuser, I need correct attribution for viewing, sharing, downloading, and remixing. | Title, creator, institution, license, source, modification notice, and ShareAlike obligations render from normalized rules and export in machine-readable form. | OS-021, OS-023 |
+| OS-025 | **Build the Attribution Engine.** As a reuser, I need correct attribution when viewing or downloading eligible source material. | Title, creator, institution, license, source, permitted-use terms, and applicable obligations render from normalized rules and accompany every permitted download or metadata export. | OS-021, OS-023 |
 | OS-026 | **Implement “Why open?” UI.** As a user, I want to understand what I may do with an item. | One gesture reveals license, plain-language permissions, obligations, rights holder, verification evidence, attribution, and source; legal icons always include text. | OS-005, OS-025 |
-| OS-027 | **Implement derivative compatibility checks.** As a creator, I need remixes blocked when source obligations conflict. | Combined artifacts compute downstream obligations; incompatible combinations are blocked with a precise explanation; exports carry required notices. | OS-025 |
+| OS-027 | **Implement rights-safe source downloads.** As a user, I need downloads limited to uses and formats OpenScroll can legally support. | Download eligibility derives from verified rights and source terms; every download includes or links required attribution; restricted derivatives and unsupported formats are blocked with a precise explanation. | OS-025 |
 
 ### Epic E: Knowledge, entity, content, and interest graphs
 
@@ -453,7 +454,7 @@ Every ticket is complete only when:
 | OS-074 | **Build coverage dashboard.** As the product team, we need to see topic, geography, language, medium, era, and local-perspective gaps. | Coverage can be filtered by Scroll/root entity and source; missing or thin dimensions are quantified without counting unverifiable candidates as coverage. | OS-014, OS-051, OS-071 |
 | OS-075 | **Build metadata and duplicate review tools.** As an administrator, I need to repair malformed objects and incorrect clusters. | Reviewers can compare source records, split/merge clusters, correct mappings without rewriting source truth, and trigger reindexing with audit history. | OS-045, OS-046, OS-071 |
 
-### Epic L: Feedback, exploration, saves, collections, and sharing
+### Epic L: Feedback, exploration, local saves, and canonical linking
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
@@ -461,9 +462,9 @@ Every ticket is complete only when:
 | OS-077 | **Implement “Why this?” explanation.** As a user, I want to understand and change why an item appeared. | Root → selected topic → related topic → item → source path is one gesture away; every link is evidence-backed; feedback controls are offered in the same sheet. | OS-032, OS-049, OS-076 |
 | OS-078 | **Build fractal branch exploration.** As a user, I want any discovered concept to become an exploration. | The branch sheet shows definition, relationship path, related topics, Explore now, Add to Scroll, and Create New Scroll; returning restores the exact feed position. | OS-035, OS-038, OS-053 |
 | OS-079 | **Build saves and collections.** As a user, I want to save objects and organize them with full provenance. | Double tap and bookmark save with undo; collections need only a name; objects retain rights/attribution snapshots and refresh status; offline behavior is clear. | OS-010, OS-053, OS-062 |
-| OS-080 | **Build deliberate anonymous sharing.** As a user, I want to share a Scroll, collection, or item without creating an account. | Nothing uploads automatically; confirmation shows exactly what becomes public; shared objects receive unguessable links, accessible previews, stable IDs, source attribution, rights-safe thumbnails, expiry/delete controls, and no browser history or unrelated preferences. | OS-038, OS-079, OS-025 |
-| OS-081 | **Build Copy and Remix Scroll.** As a user, I want to adopt or adapt a shared topic recipe locally. | Opening a shared recipe does not alter local preferences until confirmed; Copy/Remix creates an independent browser-local Scroll with origin attribution; no Follow or author-update dependency exists. | OS-080, OS-012 |
-| OS-082 | **Build generated open-knowledge artifacts.** As a user, I want to create timelines, galleries, playlists, maps, reading lists, dataset stories, lessons, and exhibitions. | Each artifact records inputs, transformations, citations, license compatibility, attribution, accessibility alternatives, edit controls, and export restrictions. | OS-027, OS-060, OS-079 |
+| OS-080 | **Share canonical source-item links.** As a user, I want to send someone an existing verified-open item without publishing my own data. | Native Share and Copy Link expose only the canonical OpenScroll item/topic URL and source attribution; no Scroll settings, collection membership, history, annotations, device identifier, or user-created object is uploaded or encoded. | OS-025, OS-053 |
+| OS-081 | **Build editorial Scroll templates.** As a user, I want to start from OpenScroll-curated topic recipes without receiving another user's data. | Templates are created only by authorized OpenScroll editorial staff, are clearly labeled, contain no consumer data, and copy into an independent browser-local Scroll only after confirmation. | OS-038, OS-071 |
+| OS-082 | **Enforce the no-UGC boundary.** As the product owner, I need every consumer surface and API to reject user publication. | No consumer endpoint or UI accepts media, posts, prose, annotations, public collections, public Scrolls, generated exhibitions, creator profiles, or public recipe submission; security tests verify that imports remain local and cannot become hosted content. | OS-009, OS-012, OS-071 |
 
 ### Epic M: Explore, current information, source controls, and safety
 
@@ -483,7 +484,7 @@ Every ticket is complete only when:
 | OS-089 | **Implement data-quality and rights-quality scorecards.** As operators, we need to detect attribution, license, metadata, accessibility, and broken-media failures. | Automated audits sample source and feed outputs; thresholds block release or disable a connector; correction ownership is explicit. | OS-022, OS-025, OS-072 |
 | OS-090 | **Build ranking and AI evaluation suites.** As a user, I need relevance, diversity, factuality, multilingual quality, and local representation to remain trustworthy. | Curated test sets, counterfactual tests, human review, regression thresholds, and model/rule versioning cover named risks; watch-time optimization is excluded. | OS-044, OS-049, OS-051 |
 | OS-091 | **Meet performance and resilience budgets.** As a user, I need a responsive Scroll despite large media and external failures. | Defined p75/p95 budgets cover first content, next-card readiness, search, topic expansion, and viewers; load, cache, backpressure, failover, and chaos tests pass. | OS-053, OS-070, OS-072 |
-| OS-092 | **Complete security and abuse review.** As a user and source partner, I need local data, ingestion, media, anonymous sharing, and internal administration protected. | Threat model covers IndexedDB exposure, XSS, malicious imports/media, prompt injection in source text, SSRF, supply chain, share abuse, rate abuse, privacy leaks, and staff authentication; critical findings close. | OS-070, OS-071, OS-080 |
+| OS-092 | **Complete security and abuse review.** As a user and source partner, I need local data, ingestion, canonical links, and internal administration protected. | Threat model covers IndexedDB exposure, XSS, malicious imports/media, prompt injection in source text, SSRF, supply chain, link abuse, rate abuse, privacy leaks, attempts to bypass the no-UGC boundary, and staff authentication; critical findings close. | OS-070, OS-071, OS-080, OS-082 |
 | OS-093 | **Complete accessibility certification.** As a disabled user, I need the full critical path and every media viewer to be independently usable. | Automated and expert manual audits cover mobile/web, screen readers, keyboard/switch, zoom, captions, charts, reduced motion, and RTL; critical issues close. | OS-007, OS-053 through OS-062 |
 | OS-094 | **Run end-to-end usability and cultural review.** As the product team, we need evidence that OpenScroll is calm, understandable, and locally representative. | First-time Morocco task, icon comprehension, provenance, rights, branching, session pause, Arabic/RTL, and local-perspective tests meet predefined success criteria. | OS-077, OS-078, OS-086, OS-093 |
 | OS-095 | **Execute migration, rollback, and disaster-recovery validation.** As an operator, I need recoverable releases and preserved provenance. | Backups, point-in-time recovery, index rebuild, connector replay, rights-rule rollback, model rollback, and incident communication are rehearsed. | OS-016, OS-040, OS-072 |
@@ -501,7 +502,7 @@ Every ticket is complete only when:
 | Multilingual and cross-script discovery | OS-008, OS-029, OS-036, OS-040–OS-044, OS-061 |
 | Explainable recommendation and rights | OS-026, OS-062, OS-076, OS-077 |
 | Fractal exploration | OS-035, OS-078 |
-| Local saves, collections, anonymous sharing, and remixing | OS-010–OS-012, OS-079–OS-082 |
+| Local saves and collections, canonical item links, and no UGC | OS-010–OS-012, OS-079–OS-082 |
 | Search and editorial Explore | OS-042, OS-083 |
 | Current information without license exceptions | OS-084 |
 | No social-post or compulsion model | OS-049, OS-052, OS-088, release review |
@@ -518,7 +519,7 @@ OpenScroll 1.0 is complete only when OS-096 is accepted. Individual epics may be
 
 ### Product rule
 
-OpenScroll has no consumer authentication or cloud profile. The browser and device are the boundary of personal state. The OpenScroll backend serves the verified content corpus, topic expansion, search, ranking inputs, and deliberately published share objects; it does not maintain identifiable consumer profiles.
+OpenScroll has no consumer authentication or cloud profile. The browser and device are the boundary of personal state. The OpenScroll backend serves the verified content corpus, topic expansion, search, ranking inputs, canonical item/topic pages, and staff-created editorial templates; it does not maintain identifiable consumer profiles or host consumer-created content.
 
 ### Recommended storage allocation
 
@@ -547,6 +548,7 @@ OpenScroll has no consumer authentication or cloud profile. The browser and devi
 
 - **No cross-device sync:** A Scroll created on a phone does not automatically appear on a laptop. Export/import is the privacy-first transfer mechanism in 1.0.
 - **No recovery account:** If site data is cleared and no export exists, local preferences and saves cannot be restored.
-- **No private cloud sharing:** Sharing is a deliberate publish action that creates a sanitized, non-identifying server object behind an unguessable link. The confirmation screen must list exactly what will leave the browser.
-- **No following people:** Shared Scrolls can be copied or remixed locally, but there is no creator identity or automatic author-update relationship.
+- **No publishing:** Scrolls, collections, preferences, annotations, and generated arrangements never become hosted OpenScroll objects. Export creates a private local file only.
+- **Canonical links only:** Share actions may send an existing source-item or public topic URL. They never transmit the user's local context or create a public user object.
+- **No following or remixing people:** There are no consumer identities, creator profiles, public recipes, or author-update relationships. Only staff-created editorial templates may be copied locally.
 - **Backend analytics remain aggregate:** The system may measure source health and aggregate product quality, but it must not reconstruct a persistent consumer profile.
