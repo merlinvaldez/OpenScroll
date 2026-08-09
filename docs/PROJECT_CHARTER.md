@@ -68,6 +68,7 @@ Every item must clearly disclose its source, creator when known, license, reason
 7. **Local perspective:** Country and culture Scrolls intentionally seek creators, languages, and institutions connected to the culture.
 8. **One world, many media:** Institutional differences disappear at the interaction layer while source identity remains intact.
 9. **User-controlled completion:** Sessions have humane stopping points and never rely on forced endlessness.
+10. **No consumer accounts:** Anyone can use OpenScroll immediately. Personal Scrolls, preferences, history, saves, and collections remain local to that browser unless the user deliberately exports or shares them.
 
 ## 8. Scope of OpenScroll 1.0
 
@@ -81,7 +82,9 @@ Every item must clearly disclose its source, creator when known, license, reason
 - Branch exploration and new-Scroll creation
 - Explicit feed controls and semantic preference controls
 - Global search and editorial exploration
-- Saves, collections, Scroll sharing, following, and remixing
+- Locally saved Scrolls, preferences, history, saves, and collections
+- Deliberate Scroll, collection, and item sharing without consumer accounts
+- Copying and remixing shared Scroll recipes
 - Source, rights, attribution, and recommendation transparency
 - Multilingual discovery, translation, and original-language access
 - Sensitive-content labeling and contextual notes
@@ -97,6 +100,7 @@ Every item must clearly disclose its source, creator when known, license, reason
 - Standard YouTube licensed video
 - Spotify or Apple Music playback without an independently open recording
 - Advertising-based behavioral profiling
+- Consumer registration, login, profiles, account recovery, or cloud synchronization
 - A creator social network, comments, follower counts, or public popularity contests
 - Final selection of the business model
 - A commitment that the application code itself will be open source
@@ -332,14 +336,14 @@ Every ticket is complete only when:
 | OS-007 | **Create accessibility test harness.** As a disabled user, I need core interactions to work with assistive technology. | Automated checks run in CI; manual test scripts cover screen reader, keyboard, switch, zoom, reduced motion, captions, RTL, and chart alternatives. | OS-005 |
 | OS-008 | **Create localization and script framework.** As a multilingual user, I need the interface and content layers to render naturally in my language. | Locale routing, pluralization, date/number formatting, font fallback, bidi isolation, RTL layout, and original/translation attribution are supported. | OS-003, OS-006 |
 
-### Epic B: Identity, profiles, and privacy
+### Epic B: Local-first preferences, continuity, and privacy
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
-| OS-009 | **Enable guest exploration.** As a new user, I want to preview a Scroll before creating an account. | Interest entry, topic selection, and a bounded preview work anonymously; local state can be carried into registration. | OS-006 |
-| OS-010 | **Implement account creation and sign-in.** As a returning user, I want my Scrolls and collections available across devices. | Secure email/passkey or approved identity flow, recovery, session management, and sign-out work; no account wall precedes preview. | OS-009 |
-| OS-011 | **Build profile and preference settings.** As a user, I want to manage languages, media, sources, history, accessibility, and privacy. | Settings persist and sync; defaults are understandable; deletion and export paths are visible. | OS-010, OS-008 |
-| OS-012 | **Implement privacy controls and data lifecycle.** As a user, I want control over personalization data. | Consent is purpose-specific; explicit and implicit signals are distinguishable; export, history clearing, account deletion, and retention rules work end to end. | OS-010 |
+| OS-009 | **Enable account-free exploration.** As a new user, I want to start and keep using OpenScroll without registering or logging in. | Interest entry, topic selection, Scroll creation, saves, collections, history, and settings work anonymously; no consumer authentication code, identifier, or account prompt appears. | OS-006 |
+| OS-010 | **Implement the local data layer.** As a returning user, I want my Scrolls and preferences to remain in this browser. | Versioned IndexedDB stores Scrolls, settings, saves, collections, explicit feedback, and history; transactions, migrations, quota errors, unsupported/private-mode behavior, and corruption recovery are tested. | OS-009 |
+| OS-011 | **Build local settings and storage controls.** As a user, I want to manage languages, media, sources, history, accessibility, privacy, and device storage. | Settings persist locally; storage use and persistence status are visible; Clear, Export, and Import are understandable and reversible where possible. | OS-010, OS-008 |
+| OS-012 | **Implement local privacy and data lifecycle.** As a user, I want control over every locally stored personalization record. | Explicit and implicit signals are distinguishable; history clearing, selective deletion, complete local reset, portable export, validated import, and retention limits work end to end; telemetry remains separate and minimal. | OS-010 |
 
 ### Epic C: Universal content, source registry, and connectors
 
@@ -419,7 +423,7 @@ Every ticket is complete only when:
 | OS-054 | **Build image and archival viewers.** As a user, I want to inspect photographs, art, scans, manuscripts, posters, and primary sources. | Natural ratio, zoom, full-resolution option, creator/date/location/collection, primary-source label, context, alt text, and provenance work without destructive crops. | OS-053, OS-025 |
 | OS-055 | **Build audio and music viewers.** As a user, I want to hear eligible recordings and understand artists, works, and relationships. | Accessible transport, duration, waveform where useful, transcript, performer, recording/source distinction, MusicBrainz relationships, and background interruption handling work. | OS-053, OS-025, OS-064 |
 | OS-056 | **Build video viewer.** As a user, I want eligible open video with accessible playback. | Captions, transcript, poster, aspect ratio, quality selection, playback position, license, and original-source access work; autoplay with sound is prohibited. | OS-053, OS-025, OS-065 |
-| OS-057 | **Build article, book, and research readers.** As a user, I want distraction-free reading and source-aware summaries. | Reading controls, original/translation, citations, author/date, research methods/limitations, full-text eligibility, and progress saved locally/account-wide work. | OS-053, OS-043, OS-044 |
+| OS-057 | **Build article, book, and research readers.** As a user, I want distraction-free reading and source-aware summaries. | Reading controls, original/translation, citations, author/date, research methods/limitations, full-text eligibility, and browser-local reading progress work. | OS-053, OS-043, OS-044 |
 | OS-058 | **Build museum and 3D object viewer.** As a user, I want to inspect objects and eligible 3D assets. | Dimensions, materials, period, institution, accessible fallback media, rotate/zoom, supported formats, and performance limits work. | OS-053, OS-020 |
 | OS-059 | **Build map and timeline viewers.** As a user, I want spatial and chronological exploration. | Keyboard-accessible map controls, layer attribution, geographic descriptions, event sources, time navigation, and nonvisual alternatives work. | OS-053, OS-068 |
 | OS-060 | **Build dataset and visualization viewer.** As a user, I want to understand open data without first downloading a file. | Appropriate chart, clear measure/units, methodology, freshness, transformations, source/license, data table, accessible description, and download options work. | OS-053, OS-069 |
@@ -443,7 +447,7 @@ Every ticket is complete only when:
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
-| OS-071 | **Build role-based admin console.** As an administrator, I need secure access to source, rights, metadata, AI, and coverage tools. | Least-privilege roles, strong authentication, audit logging, filtering, saved views, and safe bulk actions work. | OS-010, OS-014 |
+| OS-071 | **Build role-based internal admin console.** As an administrator, I need secure staff-only access to source, rights, metadata, AI, and coverage tools. | Internal administrator identity is isolated from the consumer product; least-privilege roles, strong authentication, audit logging, filtering, saved views, and safe bulk actions work. | OS-014 |
 | OS-072 | **Build source-health monitoring.** As an operator, I need connector failure visibility without collapsing the user feed. | Healthy, degraded, rate-limited, offline, auth-error, and schema-change states derive from checks; alerts, runbooks, and fallback composition work. | OS-016, OS-071 |
 | OS-073 | **Build source-review and discovery queue.** As an integrations team, we need to evaluate APIs, OAI-PMH, IIIF, CKAN, SPARQL, feeds, and license metadata safely. | Candidate evidence, terms, rights patterns, technical tests, reviewer decisions, and rejection reasons persist; no source is auto-trusted. | OS-067, OS-071 |
 | OS-074 | **Build coverage dashboard.** As the product team, we need to see topic, geography, language, medium, era, and local-perspective gaps. | Coverage can be filtered by Scroll/root entity and source; missing or thin dimensions are quantified without counting unverifiable candidates as coverage. | OS-014, OS-051, OS-071 |
@@ -457,8 +461,8 @@ Every ticket is complete only when:
 | OS-077 | **Implement “Why this?” explanation.** As a user, I want to understand and change why an item appeared. | Root → selected topic → related topic → item → source path is one gesture away; every link is evidence-backed; feedback controls are offered in the same sheet. | OS-032, OS-049, OS-076 |
 | OS-078 | **Build fractal branch exploration.** As a user, I want any discovered concept to become an exploration. | The branch sheet shows definition, relationship path, related topics, Explore now, Add to Scroll, and Create New Scroll; returning restores the exact feed position. | OS-035, OS-038, OS-053 |
 | OS-079 | **Build saves and collections.** As a user, I want to save objects and organize them with full provenance. | Double tap and bookmark save with undo; collections need only a name; objects retain rights/attribution snapshots and refresh status; offline behavior is clear. | OS-010, OS-053, OS-062 |
-| OS-080 | **Build Scroll, collection, and item sharing.** As a user, I want to share useful discoveries. | Share links have privacy controls, accessible previews, stable canonical IDs, source attribution, rights-safe thumbnails, and revoked/unavailable states. | OS-038, OS-079, OS-025 |
-| OS-081 | **Build Follow and Remix Scroll.** As a user, I want to adopt or adapt another person's topic recipe. | Following preserves author updates by policy; remix creates an independent copy with origin attribution; private topics and history never leak. | OS-080, OS-012 |
+| OS-080 | **Build deliberate anonymous sharing.** As a user, I want to share a Scroll, collection, or item without creating an account. | Nothing uploads automatically; confirmation shows exactly what becomes public; shared objects receive unguessable links, accessible previews, stable IDs, source attribution, rights-safe thumbnails, expiry/delete controls, and no browser history or unrelated preferences. | OS-038, OS-079, OS-025 |
+| OS-081 | **Build Copy and Remix Scroll.** As a user, I want to adopt or adapt a shared topic recipe locally. | Opening a shared recipe does not alter local preferences until confirmed; Copy/Remix creates an independent browser-local Scroll with origin attribution; no Follow or author-update dependency exists. | OS-080, OS-012 |
 | OS-082 | **Build generated open-knowledge artifacts.** As a user, I want to create timelines, galleries, playlists, maps, reading lists, dataset stories, lessons, and exhibitions. | Each artifact records inputs, transformations, citations, license compatibility, attribution, accessibility alternatives, edit controls, and export restrictions. | OS-027, OS-060, OS-079 |
 
 ### Epic M: Explore, current information, source controls, and safety
@@ -469,7 +473,7 @@ Every ticket is complete only when:
 | OS-084 | **Build current-events category.** As a user, I want current open information without weakening rights standards. | Only verified-open journalism, government releases, institutional reporting, and data enter; freshness is visible; thin coverage is stated honestly. | OS-022, OS-069, OS-050 |
 | OS-085 | **Build source controls.** As a user, I want to inspect and disable repositories powering my Scroll. | Included sources, status, coverage role, and rights model are visible; disabling updates retrieval without deleting the user's topics; zero-source states are recoverable. | OS-014, OS-038, OS-048 |
 | OS-086 | **Implement sensitive-content labels.** As a user, I want control over violence, nudity, racist artifacts, colonial material, medical imagery, and other sensitive records. | Labels separate source description from modern context; reveal is accessible and user-controlled; legitimate historical material is not silently erased. | OS-044, OS-053 |
-| OS-087 | **Implement safety and representation preferences.** As a user, I want durable but revisable controls for sensitive categories and perspective. | Defaults are age-appropriate and jurisdiction-aware; choices sync privately; emergency or illegal-content handling follows documented policy. | OS-011, OS-086 |
+| OS-087 | **Implement safety and representation preferences.** As a user, I want durable but revisable controls for sensitive categories and perspective. | Defaults are age-appropriate and jurisdiction-aware; choices persist locally and are included in optional export; emergency or illegal-content handling follows documented policy. | OS-011, OS-086 |
 
 ### Epic N: Analytics, quality, performance, security, and release
 
@@ -479,7 +483,7 @@ Every ticket is complete only when:
 | OS-089 | **Implement data-quality and rights-quality scorecards.** As operators, we need to detect attribution, license, metadata, accessibility, and broken-media failures. | Automated audits sample source and feed outputs; thresholds block release or disable a connector; correction ownership is explicit. | OS-022, OS-025, OS-072 |
 | OS-090 | **Build ranking and AI evaluation suites.** As a user, I need relevance, diversity, factuality, multilingual quality, and local representation to remain trustworthy. | Curated test sets, counterfactual tests, human review, regression thresholds, and model/rule versioning cover named risks; watch-time optimization is excluded. | OS-044, OS-049, OS-051 |
 | OS-091 | **Meet performance and resilience budgets.** As a user, I need a responsive Scroll despite large media and external failures. | Defined p75/p95 budgets cover first content, next-card readiness, search, topic expansion, and viewers; load, cache, backpressure, failover, and chaos tests pass. | OS-053, OS-070, OS-072 |
-| OS-092 | **Complete security and abuse review.** As a user and source partner, I need accounts, ingestion, media, and sharing protected. | Threat model covers auth, SSRF, malicious media, prompt injection in source text, XSS, supply chain, rate abuse, privacy leaks, and admin access; critical findings close. | OS-070, OS-071, OS-080 |
+| OS-092 | **Complete security and abuse review.** As a user and source partner, I need local data, ingestion, media, anonymous sharing, and internal administration protected. | Threat model covers IndexedDB exposure, XSS, malicious imports/media, prompt injection in source text, SSRF, supply chain, share abuse, rate abuse, privacy leaks, and staff authentication; critical findings close. | OS-070, OS-071, OS-080 |
 | OS-093 | **Complete accessibility certification.** As a disabled user, I need the full critical path and every media viewer to be independently usable. | Automated and expert manual audits cover mobile/web, screen readers, keyboard/switch, zoom, captions, charts, reduced motion, and RTL; critical issues close. | OS-007, OS-053 through OS-062 |
 | OS-094 | **Run end-to-end usability and cultural review.** As the product team, we need evidence that OpenScroll is calm, understandable, and locally representative. | First-time Morocco task, icon comprehension, provenance, rights, branching, session pause, Arabic/RTL, and local-perspective tests meet predefined success criteria. | OS-077, OS-078, OS-086, OS-093 |
 | OS-095 | **Execute migration, rollback, and disaster-recovery validation.** As an operator, I need recoverable releases and preserved provenance. | Backups, point-in-time recovery, index rebuild, connector replay, rights-rule rollback, model rollback, and incident communication are rehearsed. | OS-016, OS-040, OS-072 |
@@ -497,7 +501,7 @@ Every ticket is complete only when:
 | Multilingual and cross-script discovery | OS-008, OS-029, OS-036, OS-040–OS-044, OS-061 |
 | Explainable recommendation and rights | OS-026, OS-062, OS-076, OS-077 |
 | Fractal exploration | OS-035, OS-078 |
-| Saves, collections, sharing, and remixing | OS-079–OS-082 |
+| Local saves, collections, anonymous sharing, and remixing | OS-010–OS-012, OS-079–OS-082 |
 | Search and editorial Explore | OS-042, OS-083 |
 | Current information without license exceptions | OS-084 |
 | No social-post or compulsion model | OS-049, OS-052, OS-088, release review |
@@ -509,3 +513,40 @@ Every ticket is complete only when:
 ### Definition of 1.0 completion
 
 OpenScroll 1.0 is complete only when OS-096 is accepted. Individual epics may be delivered incrementally behind controlled release states, but no partial subset should be described as the full OpenScroll 1.0 promised in this charter.
+
+## 21. Account-Free Local Storage Architecture
+
+### Product rule
+
+OpenScroll has no consumer authentication or cloud profile. The browser and device are the boundary of personal state. The OpenScroll backend serves the verified content corpus, topic expansion, search, ranking inputs, and deliberately published share objects; it does not maintain identifiable consumer profiles.
+
+### Recommended storage allocation
+
+| Browser capability | OpenScroll use | Rule |
+| --- | --- | --- |
+| IndexedDB | Scrolls, topic weights, exclusions, preferences, saves, collections, history, explicit feedback, reading/listening position, compact cached metadata | Primary local database; asynchronous, transactional, indexed, and schema-versioned |
+| `localStorage` | At most a tiny boot preference such as theme, locale, or completed first-use hints | Never use for the main data model; synchronous and string-only; no sensitive data |
+| Cache Storage + service worker | Application shell and a bounded cache of eligible thumbnails, transcripts, and media responses | Cache only when source rights and terms permit; version and evict with a size-aware policy |
+| Storage Manager | Quota estimates and optional persistent-storage request | Request persistence only after the user creates meaningful local state; never claim it is guaranteed |
+
+### Required reliability practices
+
+- Treat browser storage as durable but user-controlled, not as an infallible backup. Browsers may use best-effort storage by default, and users can clear site data at any time.
+- Offer **Export OpenScroll Data** as a versioned JSON file containing preferences, Scroll recipes, saves, collections, and history selected by the user.
+- Offer validated **Import OpenScroll Data**, with schema migration, preview, duplicate handling, and rollback on failure.
+- Show a calm first-run disclosure: **Saved on this device. Clearing browser data removes it. Export a backup anytime.**
+- Ask `navigator.storage.persist()` only after the user has created or saved meaningful state, and explain that the browser decides whether to grant it.
+- Use `navigator.storage.estimate()` to monitor quota and warn before large offline downloads.
+- Keep full media out of IndexedDB by default. Cache only eligible, deliberately saved offline media with clear size controls and least-recently-used eviction.
+- Version every local schema and test forward migrations, interrupted migrations, downgrade handling, and corruption recovery.
+- Validate imported JSON strictly. Never execute imported markup, scripts, URLs, or model instructions.
+- Use a strict Content Security Policy, dependency controls, output encoding, and sanitization. Browser-local data is readable by JavaScript running on the same origin, so encryption alone does not solve XSS.
+- Private/incognito storage may be temporary or restricted. Detect failures and explain them without blocking scrolling.
+
+### Experience consequences
+
+- **No cross-device sync:** A Scroll created on a phone does not automatically appear on a laptop. Export/import is the privacy-first transfer mechanism in 1.0.
+- **No recovery account:** If site data is cleared and no export exists, local preferences and saves cannot be restored.
+- **No private cloud sharing:** Sharing is a deliberate publish action that creates a sanitized, non-identifying server object behind an unguessable link. The confirmation screen must list exactly what will leave the browser.
+- **No following people:** Shared Scrolls can be copied or remixed locally, but there is no creator identity or automatic author-update relationship.
+- **Backend analytics remain aggregate:** The system may measure source health and aggregate product quality, but it must not reconstruct a persistent consumer profile.
