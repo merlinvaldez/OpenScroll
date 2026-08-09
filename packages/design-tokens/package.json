@@ -1,7 +1,1 @@
-{
-  "name": "@openscroll/design-tokens",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "exports": { ".": "./src/tokens.js", "./tokens.css": "./src/tokens.css" }
-}
+{"name":"@openscroll/design-tokens","version":"1.0.0","private":true,"type":"module","exports":{".":"./src/tokens.js","./tokens.css":"./src/tokens.css"}}
