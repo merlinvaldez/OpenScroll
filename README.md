@@ -2,32 +2,15 @@
 
 OpenScroll is a calm, account-free interface for exploring verifiably open knowledge and culture.
 
-This repository currently implements **Epic A (OS-001 through OS-008)**: the engineering foundation, shared contracts, design tokens, icon system, interaction primitives, responsive application shell, accessibility harness, and localization/RTL foundation.
+Epic A (OS-001 through OS-008) is implemented as the production foundation, including the monorepo, versioned contracts, compatibility gate, design tokens, icon and interaction primitives, responsive mobile/tablet/desktop shells, accessibility harness, and English/Spanish/Arabic localization with RTL support.
 
-## Workspace
-
-- `apps/web`: Next.js App Router application
-- `packages/contracts`: versioned API and event schemas
-- `packages/design-tokens`: shared visual and motion tokens
-- `docs`: product charter and design specification
-- `tests`: browser accessibility tests
-
-## Run locally
+## Commands
 
 ```bash
 npm install
 npm run dev
-```
-
-Then open `http://localhost:3000`.
-
-## Quality checks
-
-```bash
-npm test
-npm run lint
-npm run build
+npm run check
 npm run test:a11y
 ```
 
-No authentication, database, or runtime secrets are used in Epic A.
+Environment separation is documented in `docs/ENVIRONMENTS.md`; manual accessibility verification is in `docs/ACCESSIBILITY_TEST_PLAN.md`.
