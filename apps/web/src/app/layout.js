@@ -1,3 +1,9 @@
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 import { Geist, Geist_Mono } from "next/font/google";
 import "@openscroll/design-tokens/tokens.css";
 import "./globals.css";
