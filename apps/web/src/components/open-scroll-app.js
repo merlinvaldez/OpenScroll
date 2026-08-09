@@ -27,11 +27,12 @@ export default function OpenScrollApp() {
   }, []);
   useEffect(() => { document.documentElement.lang = locale; document.documentElement.dir = directionFor(locale); }, [locale]);
   useEffect(() => { document.documentElement.dataset.hydrated = "true"; return () => { delete document.documentElement.dataset.hydrated; }; }, []);
+  useEffect(() => { if (step === 0 && restoreFocus.current) interestInput.current?.focus(); }, [step]);
   useEffect(() => { const resolved = theme === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : theme; document.documentElement.dataset.theme = resolved; }, [theme]);
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(""), 1800); return () => clearTimeout(timer); } }, [toast]);
   function save(next = {}) { localStorage.setItem(PREFERENCE_KEY, JSON.stringify({ interest: interest.trim(), topics: [...selected], locale, theme, ...next })); }
   function go(next, focusRef) { restoreFocus.current = focusRef?.current ?? document.activeElement; setStep(next); requestAnimationFrame(() => document.querySelector("main input, main button")?.focus()); }
-  function back(next) { setStep(next); requestAnimationFrame(() => restoreFocus.current?.focus()); }
+  function back(next) { setStep(next); }
   function chooseInterest(event) { event.preventDefault(); if (interest.trim()) go(1, interestInput); }
   function toggleTopic(topic) { setSelected((current) => { const next = new Set(current); next.has(topic) ? next.delete(topic) : next.add(topic); return next; }); }
   function openFeed() { if (!selected.size) { setToast(messages.empty); return; } save(); setStep(2); }
