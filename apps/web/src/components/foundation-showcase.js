@@ -2,202 +2,172 @@
 
 import { useEffect, useState } from "react";
 import {
-  ArrowRight, BookOpen, CheckCircle2, CircleAlert, Compass, Database,
-  Globe2, Languages, Moon, Music2, Search, Settings2, Sparkles, Sun, Volume2
+  ArrowLeft, ArrowRight, BookOpen, Check, Compass, Database, Globe2,
+  Languages, Music2, Search
 } from "lucide-react";
 
-import AppShell from "./app-shell";
-import { Button, Chip, Dialog, IconButton, Sheet, Skeleton, StateCard, Toast } from "./ui/primitives";
+const TOPICS = [
+  ["Music", Music2],
+  ["Darija", Languages],
+  ["Architecture", Compass],
+  ["History", BookOpen],
+  ["Open data", Database],
+  ["Culture", Globe2],
+];
 
-const copy = {
-  en: {
-    locale: "English", direction: "ltr", prompt: "What do you want to explore?",
-    lead: "A calm foundation for the world’s open knowledge.", placeholder: "Try Morocco",
-    topics: "Suggested directions", build: "Build Scroll", status: "Epic A foundation",
-    statusBody: "The product shell, tokens, primitives, contracts, accessibility, and language foundation are working together.",
-    dialogTitle: "A quiet dialog", dialogBody: "One decision at a time, with focus kept inside until you close it.",
-    sheetTitle: "Foundation details", sheetBody: "This bottom sheet demonstrates progressive disclosure without competing with the main experience."
-  },
-  fr: {
-    locale: "Français", direction: "ltr", prompt: "Que voulez-vous explorer ?",
-    lead: "Une base calme pour les savoirs ouverts du monde.", placeholder: "Essayez Maroc",
-    topics: "Pistes suggérées", build: "Créer le Scroll", status: "Fondation de l’épopée A",
-    statusBody: "La structure, les jetons, les composants, les contrats, l’accessibilité et les langues fonctionnent ensemble.",
-    dialogTitle: "Une fenêtre calme", dialogBody: "Une décision à la fois, avec le focus conservé jusqu’à la fermeture.",
-    sheetTitle: "Détails de la fondation", sheetBody: "Cette feuille illustre la divulgation progressive sans rivaliser avec l’expérience principale."
-  },
-  ar: {
-    locale: "العربية", direction: "rtl", prompt: "ماذا تريد أن تستكشف؟",
-    lead: "أساس هادئ للمعرفة المفتوحة في العالم.", placeholder: "جرّب المغرب",
-    topics: "مسارات مقترحة", build: "أنشئ التمرير", status: "أساس المرحلة الأولى",
-    statusBody: "تعمل بنية المنتج والرموز والمكوّنات والعقود وإمكانية الوصول واللغات معًا.",
-    dialogTitle: "نافذة هادئة", dialogBody: "قرار واحد في كل مرة، مع بقاء التركيز داخل النافذة حتى إغلاقها.",
-    sheetTitle: "تفاصيل الأساس", sheetBody: "توضّح هذه اللوحة الإفصاح التدريجي دون منافسة التجربة الرئيسية."
-  }
-};
-
-const topics = [
-  ["Music", Music2], ["Darija", Languages], ["Architecture", Compass],
-  ["History", BookOpen], ["Open data", Database], ["Culture", Globe2]
+const CARDS = [
+  { type: "MUSIC", title: "The living pulse of Gnawa", source: "Wikimedia Commons", color: "#415f4a" },
+  { type: "LANGUAGE", title: "Darija, written and spoken", source: "Wiktionary", color: "#c66c3b" },
+  { type: "HISTORY", title: "A brief history of the medina", source: "OpenStreetMap", color: "#697b8e" },
 ];
 
 export default function FoundationShowcase() {
-  const [theme, setTheme] = useState("light");
-  const [locale, setLocale] = useState("en");
+  const [step, setStep] = useState(0);
+  const [interest, setInterest] = useState("");
   const [selected, setSelected] = useState(new Set(["Music", "Darija", "History"]));
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [toast, setToast] = useState("");
-  const dictionary = copy[locale];
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("openscroll:theme");
-    if (savedTheme !== "dark" && savedTheme !== "light") return undefined;
-    const timeout = window.setTimeout(() => setTheme(savedTheme), 0);
-    return () => window.clearTimeout(timeout);
+    const saved = window.localStorage.getItem("openscroll:preferences");
+    if (!saved) return;
+    try {
+      const data = JSON.parse(saved);
+      if (typeof data.interest === "string") setInterest(data.interest);
+      if (Array.isArray(data.topics)) setSelected(new Set(data.topics));
+    } catch {}
   }, []);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("openscroll:theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
-    document.documentElement.lang = locale;
-    document.documentElement.dir = dictionary.direction;
-  }, [locale, dictionary.direction]);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timeout = window.setTimeout(() => setToast(""), 2600);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
+  function chooseInterest(event) {
+    event.preventDefault();
+    if (interest.trim()) setStep(1);
+  }
 
   function toggleTopic(topic) {
     setSelected((current) => {
       const next = new Set(current);
-      if (next.has(topic)) next.delete(topic);
-      else next.add(topic);
+      next.has(topic) ? next.delete(topic) : next.add(topic);
       return next;
     });
   }
 
-  const actions = (
-    <>
-      <label className="locale-control">
-        <Languages size={19} aria-hidden="true" />
-        <span className="sr-only">Interface language</span>
-        <select value={locale} onChange={(event) => setLocale(event.target.value)} aria-label="Interface language">
-          {Object.entries(copy).map(([key, value]) => <option value={key} key={key}>{value.locale}</option>)}
-        </select>
-      </label>
-      <IconButton label={theme === "light" ? "Use dark theme" : "Use light theme"} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-        {theme === "light" ? <Moon size={20} aria-hidden="true" /> : <Sun size={20} aria-hidden="true" />}
-      </IconButton>
-      <IconButton label="Open foundation details" onClick={() => setSheetOpen(true)}>
-        <Settings2 size={20} aria-hidden="true" />
-      </IconButton>
-    </>
-  );
+  function openFeed() {
+    window.localStorage.setItem("openscroll:preferences", JSON.stringify({
+      interest: interest.trim(),
+      topics: [...selected],
+    }));
+    setStep(2);
+  }
 
   return (
-    <AppShell actions={actions}>
-      <div className="foundation-page">
-        <section className="hero" aria-labelledby="explore-heading">
-          <div className="release-pill"><Sparkles size={15} aria-hidden="true" /> {dictionary.status}</div>
-          <h1 id="explore-heading">{dictionary.prompt}</h1>
-          <p className="hero__lead">{dictionary.lead}</p>
-          <form className="interest-form" onSubmit={(event) => { event.preventDefault(); setToast("Interest ready to explore"); }}>
+    <main className="journey">
+      <style jsx global>{`
+        :root { color-scheme: light; }
+        * { box-sizing: border-box; }
+        html, body { min-height: 100%; margin: 0; }
+        body { background: #f5f1e8; color: #1e2821; font-family: Arial, Helvetica, sans-serif; }
+        button, input { font: inherit; }
+        button { color: inherit; }
+        .journey { min-height: 100vh; }
+        .screen { min-height: 100vh; display: grid; align-content: center; width: min(100% - 36px, 760px); margin: auto; padding: 48px 0; }
+        .screen--feed { align-content: start; width: min(100% - 28px, 540px); }
+        .mark { position: fixed; top: 24px; left: 24px; display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #738474; border-radius: 50%; font: italic 21px Georgia, serif; color: #34553e; }
+        h1 { margin: 0 0 42px; text-align: center; font: 400 clamp(42px, 8vw, 72px)/.98 Georgia, serif; letter-spacing: -.055em; }
+        .search { display: flex; align-items: center; gap: 12px; width: min(100%, 620px); margin: auto; padding: 10px 10px 10px 20px; border: 1px solid #cfc8b8; border-radius: 999px; background: #fffdf8; box-shadow: 0 18px 60px rgb(40 50 42 / 8%); }
+        .search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font-size: 18px; }
+        .circle-button { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: #34553e; color: white; cursor: pointer; }
+        .circle-button:disabled { opacity: .35; cursor: default; }
+        .back { position: fixed; top: 24px; right: 24px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+        .topics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .topic { position: relative; display: grid; place-items: center; gap: 16px; min-height: 150px; padding: 22px 12px; border: 1px solid #d4ccbb; border-radius: 24px; background: #fffdf8; cursor: pointer; }
+        .topic[aria-pressed="true"] { border-color: #34553e; background: #e3eadf; }
+        .topic .check { position: absolute; top: 12px; right: 12px; }
+        .topic span { font-size: 15px; }
+        .continue { display: grid; place-items: center; width: 58px; height: 58px; margin: 34px auto 0; padding: 0; border: 0; border-radius: 50%; background: #34553e; color: white; cursor: pointer; }
+        .continue:disabled { opacity: .35; }
+        .feed-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 20px 0 16px; background: linear-gradient(#f5f1e8 72%, transparent); }
+        .feed-head strong { font: 400 28px Georgia, serif; }
+        .feed-card { overflow: hidden; margin-bottom: 18px; border: 1px solid #d4ccbb; border-radius: 28px; background: #fffdf8; }
+        .feed-art { display: grid; place-items: center; aspect-ratio: 4/3; color: white; }
+        .feed-card-content { padding: 22px; }
+        .feed-type { margin: 0 0 8px; color: #68766b; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
+        .feed-card h2 { margin: 0 0 18px; font: 400 30px/1.08 Georgia, serif; letter-spacing: -.03em; }
+        .feed-source { color: #68766b; font-size: 13px; }
+        @media (max-width: 620px) {
+          .topics { grid-template-columns: repeat(2, 1fr); }
+          .topic { min-height: 132px; }
+          h1 { margin-bottom: 34px; }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .screen { animation: enter .32s ease both; }
+          @keyframes enter { from { opacity: 0; transform: translateY(10px); } }
+        }
+        :focus-visible { outline: 3px solid #c66c3b; outline-offset: 3px; }
+      `}</style>
+
+      <span className="mark" aria-label="OpenScroll">O</span>
+
+      {step === 0 && (
+        <section className="screen" aria-labelledby="explore-title">
+          <h1 id="explore-title">What do you want to explore?</h1>
+          <form className="search" onSubmit={chooseInterest}>
             <Search size={22} aria-hidden="true" />
-            <label className="sr-only" htmlFor="interest">Interest</label>
-            <input id="interest" name="interest" placeholder={dictionary.placeholder} defaultValue="Morocco" />
-            <IconButton label="Explore interest" type="submit" className="interest-form__submit">
-              <ArrowRight size={21} aria-hidden="true" />
-            </IconButton>
+            <label htmlFor="interest" className="sr-only">Interest</label>
+            <input
+              id="interest"
+              autoFocus
+              value={interest}
+              onChange={(event) => setInterest(event.target.value)}
+              placeholder="Morocco"
+            />
+            <button className="circle-button" type="submit" disabled={!interest.trim()} aria-label="Continue">
+              <ArrowRight size={22} aria-hidden="true" />
+            </button>
           </form>
         </section>
+      )}
 
-        <section className="topic-section" aria-labelledby="topics-heading">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Explicit choice</p>
-              <h2 id="topics-heading">{dictionary.topics}</h2>
-            </div>
-            <span>{selected.size} selected</span>
-          </div>
-          <div className="chip-grid">
-            {topics.map(([topic, Icon]) => (
-              <Chip selected={selected.has(topic)} onClick={() => toggleTopic(topic)} key={topic}>
-                <Icon size={17} aria-hidden="true" /> {topic}
-              </Chip>
+      {step === 1 && (
+        <section className="screen" aria-label="Choose topics">
+          <button className="back" onClick={() => setStep(0)} aria-label="Back">
+            <ArrowLeft aria-hidden="true" />
+          </button>
+          <div className="topics">
+            {TOPICS.map(([topic, Icon]) => (
+              <button className="topic" aria-pressed={selected.has(topic)} onClick={() => toggleTopic(topic)} key={topic}>
+                {selected.has(topic) && <Check className="check" size={18} aria-hidden="true" />}
+                <Icon size={34} strokeWidth={1.6} aria-hidden="true" />
+                <span>{topic}</span>
+              </button>
             ))}
           </div>
-          <Button onClick={() => setToast("Scroll foundation created locally")}>
-            {dictionary.build} <ArrowRight size={18} aria-hidden="true" />
-          </Button>
+          <button className="continue" onClick={openFeed} disabled={!selected.size} aria-label="Build feed">
+            <ArrowRight aria-hidden="true" />
+          </button>
         </section>
+      )}
 
-        <section className="foundation-grid" aria-label="Foundation components">
-          <article className="foundation-card foundation-card--featured">
-            <div className="card-icon"><CheckCircle2 size={24} aria-hidden="true" /></div>
-            <p className="eyebrow">OS-001—OS-008</p>
-            <h2>{dictionary.status}</h2>
-            <p>{dictionary.statusBody}</p>
-            <div className="button-row">
-              <Button variant="secondary" onClick={() => setDialogOpen(true)}>Open dialog</Button>
-              <Button variant="quiet" onClick={() => setSheetOpen(true)}>Open sheet</Button>
-            </div>
-          </article>
-
-          <article className="foundation-card">
-            <div className="card-icon"><Volume2 size={24} aria-hidden="true" /></div>
-            <p className="eyebrow">Accessible states</p>
-            <h2>Loading, empty, and error</h2>
-            <div className="skeleton-stack" aria-label="Loading preview">
-              <Skeleton width="68%" /><Skeleton /><Skeleton width="44%" />
-            </div>
-            <StateCard icon={<CircleAlert size={22} />} title="Nothing open matched" message="Widen topics and try again." action={<Button variant="secondary">Widen topics</Button>} />
-          </article>
-
-          <article className="foundation-card foundation-card--tokens">
-            <p className="eyebrow">Semantic tokens</p>
-            <h2>Warm, quiet, readable</h2>
-            <div className="swatches" aria-label="Core color tokens">
-              {[
-                ["Canvas", "var(--os-canvas)"], ["Surface", "var(--os-surface)"],
-                ["Moss", "var(--os-moss)"], ["Ochre", "var(--os-ochre)"], ["Caution", "var(--os-caution)"]
-              ].map(([name, color]) => (
-                <div className="swatch" key={name}>
-                  <span style={{ background: color }} aria-hidden="true" />
-                  <small>{name}</small>
-                </div>
-              ))}
-            </div>
-          </article>
+      {step === 2 && (
+        <section className="screen screen--feed" aria-label={`${interest} feed`}>
+          <header className="feed-head">
+            <button className="back" style={{ position: "static" }} onClick={() => setStep(1)} aria-label="Back">
+              <ArrowLeft aria-hidden="true" />
+            </button>
+            <strong>{interest}</strong>
+            <span aria-hidden="true" style={{ width: 44 }} />
+          </header>
+          {CARDS.filter((card) => selected.has(card.type[0] + card.type.slice(1).toLowerCase()) || card.type === "LANGUAGE").map((card, index) => (
+            <article className="feed-card" key={card.title}>
+              <div className="feed-art" style={{ background: card.color }}>
+                {index === 0 ? <Music2 size={64} strokeWidth={1.2} /> : index === 1 ? <Languages size={64} strokeWidth={1.2} /> : <BookOpen size={64} strokeWidth={1.2} />}
+              </div>
+              <div className="feed-card-content">
+                <p className="feed-type">{card.type}</p>
+                <h2>{card.title}</h2>
+                <span className="feed-source">{card.source}</span>
+              </div>
+            </article>
+          ))}
         </section>
-
-        <footer className="foundation-footer">
-          <Globe2 size={18} aria-hidden="true" />
-          <span>Account-free · No user-generated content · WCAG 2.2 AA target · LTR + RTL</span>
-        </footer>
-      </div>
-
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={dictionary.dialogTitle} description={dictionary.dialogBody}>
-        <div className="modal__content">
-          <p>Native dialog semantics provide focus management, Escape handling, and a clear return to the triggering control.</p>
-          <Button onClick={() => setDialogOpen(false)}>Done</Button>
-        </div>
-      </Dialog>
-
-      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={dictionary.sheetTitle} description={dictionary.sheetBody}>
-        <div className="modal__content detail-list">
-          <p><strong>8</strong><span>Epic A tickets represented</span></p>
-          <p><strong>3</strong><span>Interface languages</span></p>
-          <p><strong>0</strong><span>Accounts or publishing flows</span></p>
-        </div>
-      </Sheet>
-
-      <Toast message={toast} />
-    </AppShell>
+      )}
+    </main>
   );
 }
