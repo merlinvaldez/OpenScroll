@@ -5,6 +5,7 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "next dev",
+    "start": "next start",
     "build": "next build",
     "lint": "eslint app apps/web/src packages tests",
     "test": "node --test packages/contracts/test/*.test.js apps/web/src/**/*.test.js",
