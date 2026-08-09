@@ -1,0 +1,14 @@
+{
+  "name": "openscroll",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "npm run dev --workspace=@openscroll/web",
+    "build": "npm run build --workspace=@openscroll/web",
+    "lint": "npm run lint --workspace=@openscroll/web",
+    "test": "node --test packages/contracts/test/*.test.js",
+    "test:a11y": "playwright test --config=tests/playwright.config.js"
+  },
+  "engines": { "node": ">=22" }
+}

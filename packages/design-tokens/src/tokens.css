@@ -1,0 +1,57 @@
+:root {
+  --os-canvas: #f7f5f0;
+  --os-surface: #fffefb;
+  --os-surface-raised: #ffffff;
+  --os-ink: #1d211e;
+  --os-muted-ink: #686d68;
+  --os-hairline: #dcddd7;
+  --os-moss: #476556;
+  --os-moss-strong: #314b3f;
+  --os-moss-soft: #dfe9e2;
+  --os-ochre: #a56b32;
+  --os-ochre-soft: #f2e5d6;
+  --os-caution: #8e5a43;
+  --os-focus: #235f93;
+  --os-overlay: rgb(21 22 20 / 45%);
+  --os-space-1: 4px;
+  --os-space-2: 8px;
+  --os-space-3: 12px;
+  --os-space-4: 16px;
+  --os-space-5: 24px;
+  --os-space-6: 32px;
+  --os-space-7: 48px;
+  --os-space-8: 64px;
+  --os-radius-sm: 10px;
+  --os-radius-md: 16px;
+  --os-radius-lg: 24px;
+  --os-radius-round: 999px;
+  --os-motion-quick: 140ms;
+  --os-motion-standard: 220ms;
+  --os-motion-slow: 360ms;
+  --os-touch-target: 44px;
+}
+
+[data-theme="dark"] {
+  --os-canvas: #151614;
+  --os-surface: #1e201d;
+  --os-surface-raised: #242722;
+  --os-ink: #f1f0ea;
+  --os-muted-ink: #a9aea7;
+  --os-hairline: #343731;
+  --os-moss: #86ad98;
+  --os-moss-strong: #add0bd;
+  --os-moss-soft: #283a31;
+  --os-ochre: #d6a36c;
+  --os-ochre-soft: #3d3023;
+  --os-caution: #d39a7d;
+  --os-focus: #91c9f1;
+  --os-overlay: rgb(0 0 0 / 64%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --os-motion-quick: 0ms;
+    --os-motion-standard: 0ms;
+    --os-motion-slow: 0ms;
+  }
+}
