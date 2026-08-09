@@ -128,7 +128,7 @@ export default function FoundationShowcase() {
         :focus-visible { outline: 3px solid #c66c3b; outline-offset: 3px; }
       `}</style>
 
-      <span className="mark" aria-label="OpenScroll">O</span>
+      {step !== 2 && <span className="mark" aria-label="OpenScroll">O</span>}
 
       {step === 0 && (
         <section className="screen" aria-labelledby="explore-title">
