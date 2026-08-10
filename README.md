@@ -10,7 +10,7 @@ Epic C (OS-013 through OS-020) implements the source and content platform founda
 
 Epic D (OS-021 through OS-027) implements the rights foundation: normalized license ontology, Open License Gate, item-level source verification, rights-review queue, attribution engine, "Why open?" details, and rights-safe download policy.
 
-Epic E (OS-028 through OS-032) implements the graph foundation: Wikidata-ready Knowledge Graph ingestion, multilingual entity resolution, Content Graph links, browser-local Interest Graph snapshots, and relationship APIs that power topic branches, feed ranking, and "why this?" graph explanations.
+Epic E (OS-028 through OS-032) implements the graph foundation: Wikidata-ready Knowledge Graph ingestion, multilingual entity resolution, Content Graph links, browser-local Interest Graph snapshots, and relationship APIs that power topic branches, feed ranking, and "why this?" graph explanations. Source API key integration adds server-side client config for Europeana, Smithsonian Open Access, DPLA, and Openverse without committing secrets.
 
 ## Commands
 
@@ -21,4 +21,4 @@ npm run check
 npm run test:a11y
 ```
 
-Environment separation is documented in `docs/ENVIRONMENTS.md`; manual accessibility verification is in `docs/ACCESSIBILITY_TEST_PLAN.md`. Epic implementation notes live in `docs/EPIC_C_PLATFORM.md`, `docs/EPIC_D_RIGHTS.md`, and `docs/EPIC_E_GRAPHS.md`.
+Environment separation is documented in `docs/ENVIRONMENTS.md`; manual accessibility verification is in `docs/ACCESSIBILITY_TEST_PLAN.md`. Epic implementation notes live in `docs/EPIC_C_PLATFORM.md`, `docs/EPIC_D_RIGHTS.md`, `docs/EPIC_E_GRAPHS.md`, and `docs/EPIC_E_SOURCE_KEYS.md`.
