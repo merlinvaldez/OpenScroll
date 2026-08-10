@@ -1,8 +1,8 @@
 # OpenScroll Project Charter
 
-**Status:** Draft for alignment  
-**Version:** 1.0  
-**Date:** August 9, 2026  
+**Status:** Active delivery; Epic A complete  
+**Version:** 1.1  
+**Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
 
@@ -326,6 +326,8 @@ Every ticket is complete only when:
 
 ### Epic A: Product foundation and design system
 
+**Status:** Complete. Merged to `main` in PR #4 on August 10, 2026; OS-001 through OS-008 are accepted as the production foundation.
+
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
 | OS-001 | **Establish the monorepo and environments.** As a contributor, I need a consistent workspace so that clients, services, workers, and shared packages can be developed safely. | Local, test, staging, and production configurations are separated; secrets are externalized; lint, test, build, and migration commands run in CI. | None |
@@ -338,6 +340,8 @@ Every ticket is complete only when:
 | OS-008 | **Create localization and script framework.** As a multilingual user, I need the interface and content layers to render naturally in my language. | Locale routing, pluralization, date/number formatting, font fallback, bidi isolation, RTL layout, and original/translation attribution are supported. | OS-003, OS-006 |
 
 ### Epic B: Local-first preferences, continuity, and privacy
+
+**Status:** Next planned epic.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
