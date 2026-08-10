@@ -89,6 +89,49 @@ function cleanRecords(value, cleaner, limit = 200) {
   return (Array.isArray(value) ? value : []).map(cleaner).filter(Boolean).slice(0, limit);
 }
 
+function cleanNumber(value, min = 0, max = 1, fallback = 0) {
+  return Number.isFinite(value) ? Math.min(Math.max(value, min), max) : fallback;
+}
+
+function cleanWeights(value = {}) {
+  return Object.fromEntries(Object.entries(value || {}).slice(0, 24).map(([key, score]) => [cleanString(key, 80), cleanNumber(score, 0, 1, 0)]).filter(([key]) => key));
+}
+
+function cleanGraphSnapshot(record = {}) {
+  if (!record || typeof record !== "object") return null;
+  return {
+    schemaVersion: cleanString(record.schemaVersion || "interest-graph.v1", 80),
+    id: cleanRecordId(record.id, "graph"),
+    root: {
+      label: cleanString(record.root?.label, 120),
+      nodeId: cleanString(record.root?.nodeId, 120),
+      entityId: cleanString(record.root?.entityId, 120),
+      resolutionStatus: cleanString(record.root?.resolutionStatus, 80)
+    },
+    selectedTopics: cleanTopics(record.selectedTopics),
+    excludedTopics: cleanTopics(record.excludedTopics || []),
+    weights: cleanWeights(record.weights),
+    preferences: {
+      media: cleanBooleanMap(record.preferences?.media, DEFAULT_SETTINGS.media, MEDIA_KEYS),
+      sources: cleanBooleanMap(record.preferences?.sources, DEFAULT_SETTINGS.sources, SOURCE_KEYS),
+      languages: cleanRecords(record.preferences?.languages, (item) => cleanString(item, 24), 8),
+      depth: Number.isInteger(record.preferences?.depth) ? Math.min(Math.max(record.preferences.depth, 1), 5) : 2,
+      surprise: cleanNumber(record.preferences?.surprise, 0, 1, 0.22)
+    }
+  };
+}
+
+function cleanItemGraphSnapshot(record = {}) {
+  if (!record || typeof record !== "object") return null;
+  return {
+    path: cleanRecords(record.path, (item) => cleanString(item, 120), 8),
+    pathLabels: cleanRecords(record.pathLabels, (item) => cleanString(item, 120), 8),
+    matchedTopics: cleanTopics(record.matchedTopics || []),
+    score: cleanNumber(record.score, 0, 1, 0),
+    reason: cleanString(record.reason, 240)
+  };
+}
+
 function cleanScroll(record) {
   const interest = cleanString(record?.interest, 120);
   if (!interest) return null;
@@ -100,7 +143,8 @@ function cleanScroll(record) {
     createdAt: cleanDate(record?.createdAt, timestamp),
     updatedAt: timestamp,
     itemCount: Number.isInteger(record?.itemCount) ? Math.min(Math.max(record.itemCount, 0), 1000) : 0,
-    source: "local"
+    source: "local",
+    graphSnapshot: cleanGraphSnapshot(record?.graphSnapshot)
   };
 }
 
@@ -134,7 +178,8 @@ function cleanSave(record) {
       obligations: cleanRecords(record?.rightsSnapshot?.obligations, (item) => cleanString(item, 80), 12),
       downloadAllowed: record?.rightsSnapshot?.downloadAllowed === true,
       downloadNotice: cleanString(record?.rightsSnapshot?.downloadNotice, 200)
-    }
+    },
+    graphSnapshot: cleanItemGraphSnapshot(record?.graphSnapshot)
   };
 }
 
@@ -235,7 +280,7 @@ export function updateLocalSettings(state, patch) {
   }, timestamp);
 }
 
-export function recordScrollCreation(state, { interest, topics }) {
+export function recordScrollCreation(state, { interest, topics, graphSnapshot }) {
   const timestamp = nowIso();
   const localState = normalizeLocalState(state, timestamp);
   const cleanInterest = cleanString(interest, 120);
@@ -248,7 +293,8 @@ export function recordScrollCreation(state, { interest, topics }) {
     createdAt: timestamp,
     updatedAt: timestamp,
     itemCount: 0,
-    source: "local"
+    source: "local",
+    graphSnapshot: cleanGraphSnapshot(graphSnapshot)
   };
   const history = localState.settings.privacy.saveHistory ? [{ id: recordId("history"), type: "scroll-created", signal: "implicit", targetId: scroll.id, label: cleanInterest, createdAt: timestamp }, ...localState.history] : localState.history;
   return normalizeLocalState({ ...localState, updatedAt: timestamp, scrolls: [scroll, ...localState.scrolls.filter((item) => item.id !== scroll.id)], history }, timestamp);
@@ -282,7 +328,8 @@ export function toggleSavedItem(state, item) {
         obligations: cleanRecords(item.rightsSnapshot?.obligations, (entry) => cleanString(entry, 80), 12),
         downloadAllowed: item.rightsSnapshot?.downloadAllowed === true,
         downloadNotice: cleanString(item.rightsSnapshot?.downloadNotice, 200)
-      }
+      },
+      graphSnapshot: cleanItemGraphSnapshot(item.graphSnapshot)
     }, ...localState.saves]
   }, timestamp);
 }
