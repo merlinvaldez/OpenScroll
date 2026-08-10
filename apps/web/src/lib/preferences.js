@@ -128,7 +128,8 @@ function cleanSave(record) {
     collectionIds: cleanRecords(record?.collectionIds, (item) => cleanString(item, 96), 20),
     rightsSnapshot: {
       basis: cleanString(record?.rightsSnapshot?.basis || "verified-open-source-item", 80),
-      source: cleanString(record?.rightsSnapshot?.source || record?.source, 120)
+      source: cleanString(record?.rightsSnapshot?.source || record?.source, 120),
+      license: cleanString(record?.rightsSnapshot?.license, 120)
     }
   };
 }
@@ -269,7 +270,11 @@ export function toggleSavedItem(state, item) {
       source: item.source,
       savedAt: timestamp,
       collectionIds: [collection.id],
-      rightsSnapshot: { basis: "verified-open-source-item", source: item.source }
+      rightsSnapshot: {
+        basis: cleanString(item.rightsSnapshot?.basis || "verified-open-source-item", 80),
+        source: cleanString(item.rightsSnapshot?.source || item.source, 120),
+        license: cleanString(item.rightsSnapshot?.license, 120)
+      }
     }, ...localState.saves]
   }, timestamp);
 }
