@@ -5,15 +5,25 @@ import {
   SOURCE_REGISTRY,
   canonicalMoroccoSample,
   createConnector,
+  contentItemsForTopic,
+  createContentGraph,
+  createInterestGraph,
+  createOpenScrollGraphBundle,
   createAttributionNotice,
+  createWikidataClient,
   createOpenLicenseGateDecision,
   createRightsSafeDownloadPolicy,
   createSourceRegistry,
+  createSeedKnowledgeGraph,
   createUniversalContentObject,
   evaluateRights,
   getLicenseRecord,
+  ingestKnowledgeGraph,
   normalizeLicenseId,
+  resolveEntity,
   openLicenseGate,
+  topicBranchesForInterest,
+  traverseGraph,
   runConnectorConformance,
   runIngestion,
   validateSourceRecord,
@@ -143,6 +153,88 @@ test("OS-026 and OS-027 why-open explanations and download policies follow gate 
   const policy = createRightsSafeDownloadPolicy(blocked);
   assert.equal(policy.allowed, false);
   assert.equal(policy.access, "blocked");
+});
+
+test("OS-028 Knowledge Graph ingestion builds fixture and API-backed entity graphs", async () => {
+  const fixture = await ingestKnowledgeGraph({ query: "Morocco" });
+  assert.equal(fixture.status, "fixture");
+  assert.equal(fixture.graph.schemaVersion, "knowledge-graph.v1");
+  assert.ok(fixture.graph.nodes.some((node) => node.id === "wd:Q1028"));
+  assert.ok(fixture.graph.edges.some((edge) => edge.type === "contains-place"));
+
+  const calls = [];
+  const client = createWikidataClient({
+    userAgent: "OpenScroll test",
+    fetchImpl: async (url, options) => {
+      calls.push({ url: String(url), headers: options.headers });
+      const action = url.searchParams.get("action");
+      if (action === "wbsearchentities") return { ok: true, json: async () => ({ search: [{ id: "Q1028", label: "Morocco", description: "Country", match: { text: "Maroc" } }] }) };
+      if (action === "wbgetentities") return { ok: true, json: async () => ({ entities: { Q1028: { id: "Q1028", labels: { en: { value: "Morocco" }, ar: { value: "المغرب" } }, descriptions: { en: { value: "Country in North Africa" } }, aliases: { en: [{ value: "Maroc" }] }, claims: { P17: [] } } } }) };
+      return { ok: true, json: async () => ({ results: { bindings: [] } }) };
+    }
+  });
+  const live = await ingestKnowledgeGraph({ query: "Morocco", client });
+  assert.equal(live.status, "live");
+  assert.equal(live.graph.provenance.mode, "wikidata-api");
+  assert.ok(calls.some((call) => call.url.includes("wbsearchentities")));
+  assert.equal(calls[0].headers["User-Agent"], "OpenScroll test");
+});
+
+test("OS-029 Entity resolution handles aliases, languages, Wikidata IDs, and ambiguity", () => {
+  const graph = createSeedKnowledgeGraph();
+  assert.equal(resolveEntity("Fès", graph).selected.entityId, "wd:Q80985");
+  assert.equal(resolveEntity("فاس", graph).selected.entityId, "wd:Q80985");
+  assert.equal(resolveEntity("Q1028", graph).selected.entityId, "wd:Q1028");
+  const ambiguous = resolveEntity("Mar", graph);
+  assert.equal(ambiguous.status, "ambiguous");
+  assert.ok(ambiguous.candidates.length >= 2);
+});
+
+test("OS-030 Content Graph links content to entities, topics, places, sources, media, and collections", () => {
+  const knowledgeGraph = createSeedKnowledgeGraph();
+  const contentGraph = createContentGraph(canonicalMoroccoSample, knowledgeGraph);
+  assert.equal(contentGraph.objectCount, canonicalMoroccoSample.length);
+  assert.ok(contentGraph.edges.some((edge) => edge.type === "about-entity"));
+  assert.ok(contentGraph.edges.some((edge) => edge.type === "from-source"));
+  assert.ok(contentGraph.edges.some((edge) => edge.type === "has-media-kind"));
+  assert.ok(contentItemsForTopic(contentGraph, "Music").some((node) => node.objectId.includes("gnawa")));
+});
+
+test("OS-031 Interest Graph stores explicit local choices, weights, media, sources, depth, and surprise", () => {
+  const knowledgeGraph = createSeedKnowledgeGraph();
+  const entityResolution = resolveEntity("Maroc", knowledgeGraph);
+  const graph = createInterestGraph({
+    interest: "Maroc",
+    entityResolution,
+    selectedTopics: ["Music", "Darija"],
+    excludedTopics: ["Shopping"],
+    settings: { locale: "fr", media: { video: false }, sources: { openverse: false } },
+    weights: { Music: 0.95 },
+    depth: 3,
+    surprise: 0.4
+  });
+  assert.equal(graph.root.entityId, "wd:Q1028");
+  assert.deepEqual(graph.selectedTopics, ["Music", "Darija"]);
+  assert.equal(graph.weights.Music, 0.95);
+  assert.equal(graph.preferences.media.video, false);
+  assert.equal(graph.preferences.sources.openverse, false);
+  assert.equal(graph.preferences.depth, 3);
+  assert.equal(graph.preferences.surprise, 0.4);
+  assert.equal(graph.storage.mode, "browser-local");
+});
+
+test("OS-032 Graph relationship APIs expose topic branches, traversals, ranked matches, and explanations", () => {
+  const bundle = createOpenScrollGraphBundle({ interest: "Morocco", selectedTopics: ["Music", "Architecture", "History"] });
+  assert.equal(bundle.relationshipApi.schemaVersion, "graph-relationship-api.v1");
+  assert.ok(bundle.topicBranches.some((branch) => branch.label === "Darija"));
+  assert.ok(bundle.contentMatches.length >= 3);
+  const explanation = bundle.relationshipApi.explain(bundle.contentMatches[0].object.id);
+  assert.ok(explanation.reason.includes("OpenScroll graph"));
+  assert.ok(explanation.pathLabels.length >= 2);
+  const traversal = traverseGraph({ from: bundle.interestGraph.root.entityId, graphs: [bundle.knowledgeGraph, bundle.contentGraph], depth: 2 });
+  assert.ok(traversal.paths.length);
+  const branches = topicBranchesForInterest({ knowledgeGraph: bundle.knowledgeGraph, contentGraph: bundle.contentGraph, entityResolution: bundle.entityResolution });
+  assert.ok(branches.every((branch) => branch.path[0] === "wd:Q1028"));
 });
 
 test("Epic C content platform excludes consumer accounts and publishing vocabulary", () => {
