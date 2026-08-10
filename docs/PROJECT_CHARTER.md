@@ -1,7 +1,7 @@
 # OpenScroll Project Charter
 
-**Status:** Active delivery; Epic A complete  
-**Version:** 1.1  
+**Status:** Active delivery; Epic B implementation in review  
+**Version:** 1.2  
 **Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
@@ -341,7 +341,7 @@ Every ticket is complete only when:
 
 ### Epic B: Local-first preferences, continuity, and privacy
 
-**Status:** Next planned epic.
+**Status:** Implementation in review. OS-009 through OS-012 are included in the Epic B pull request for acceptance.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
