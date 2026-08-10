@@ -1,19 +1,15 @@
 export { CONNECTOR_CONTRACT_VERSION, CONNECTOR_METHODS, createConnector, runConnectorConformance } from "./connector-sdk.js";
+export { CONTENT_GRAPH_NODE_TYPES, CONTENT_GRAPH_VERSION, contentItemsForTopic, contentNeighborhood, createContentGraph } from "./content-graph.js";
 export { createContentId, createUniversalContentObject, REQUIRED_UCO_SECTIONS, UNIVERSAL_CONTENT_OBJECT_VERSION, validateUniversalContentObject } from "./content-object.js";
+export { ENTITY_RESOLUTION_VERSION, normalizeEntityQuery, resolveEntity, resolveEntityOrRoot } from "./entity-resolution.js";
 export { EPIC_C_RAW_ITEMS } from "./fixtures.js";
+export { EPIC_E_KNOWLEDGE_SEED } from "./graph-fixtures.js";
+export { GRAPH_RELATIONSHIP_API_VERSION, createGraphRelationshipApi, createOpenScrollGraphBundle, explainContentMatch, rankContentForInterest, topicBranchesForInterest, traverseGraph } from "./graph-api.js";
 export { createIngestionJob, runIngestion } from "./ingestion.js";
+export { INTEREST_GRAPH_VERSION, createInterestGraph, summarizeInterestGraph } from "./interest-graph.js";
+export { KNOWLEDGE_EDGE_TYPES, KNOWLEDGE_GRAPH_INGESTION_VERSION, KNOWLEDGE_GRAPH_VERSION, KNOWLEDGE_NODE_TYPES, createKnowledgeEdge, createKnowledgeGraph, createKnowledgeNode, createSeedKnowledgeGraph, findKnowledgeNode, ingestKnowledgeGraph } from "./knowledge-graph.js";
 export { ATTRIBUTION_VERSION, DOWNLOAD_POLICY_VERSION, LICENSE_ONTOLOGY, LICENSE_ONTOLOGY_VERSION, OPEN_LICENSE_GATE_VERSION, QUALIFYING_LICENSES, RIGHTS_REVIEW_VERSION, createAttributionNotice, createOpenLicenseGateDecision, createRightsReviewCase, createRightsSafeDownloadPolicy, createWhyOpenExplanation, evaluateRights, getLicenseRecord, isEligibleRights, normalizeLicenseId, openLicenseGate, verifySourceRights } from "./rights.js";
+export { canonicalMoroccoSample } from "./sample.js";
 export { SOURCE_HEALTH, SOURCE_REGISTRY, SOURCE_REGISTRY_VERSION, createSourceRegistry, getSource, validateSourceRecord } from "./source-registry.js";
 export { EPIC_C_CONNECTORS, culturalAggregatorsConnector, openverseConnector, wikimediaCommonsConnector, wikimediaKnowledgeConnector } from "./source-connectors.js";
-
-import { createUniversalContentObject } from "./content-object.js";
-import { EPIC_C_RAW_ITEMS } from "./fixtures.js";
-import { openLicenseGate } from "./rights.js";
-import { getSource } from "./source-registry.js";
-
-export const canonicalMoroccoSample = EPIC_C_RAW_ITEMS
-  .filter((record) => {
-    const source = getSource(record.sourceId);
-    return openLicenseGate(record.rights, { sourceId: source?.id, sourceName: source?.name, sourceUrl: record.sourceUrl, originalSourceUrl: record.originalSourceUrl || record.sourceUrl }).decision === "accept";
-  })
-  .map((record) => createUniversalContentObject(record));
+export { WIKIDATA_CLIENT_VERSION, createWikidataClient, createWikidataClientFromEnv } from "./wikidata-client.js";
