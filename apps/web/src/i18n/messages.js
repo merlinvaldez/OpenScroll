@@ -12,7 +12,7 @@ export const messages = {
     import: "Import", clearHistory: "Clear history", resetData: "Reset data", exported: "Export ready", imported: "Import complete",
     importFailed: "Import failed", persistenceOn: "Persistence requested", persistenceLimited: "Browser decides", cleared: "History cleared",
     reset: "Local data reset", savedItems: "Saved", collections: "Collections", provenance: "Provenance", creator: "Creator", license: "License",
-    reason: "Why this?", openBasis: "Verified open source item", sourceHealth: "Source health", whyOpen: "Why open?", attribution: "Attribution",
+    reason: "Why this?", graphPath: "Graph path", graphRoot: "Resolved topic", openBasis: "Verified open source item", sourceHealth: "Source health", whyOpen: "Why open?", attribution: "Attribution",
     downloadRules: "Download", openSourceFile: "Open source file"
   },
   es: {
@@ -27,7 +27,7 @@ export const messages = {
     import: "Importar", clearHistory: "Borrar historial", resetData: "Reiniciar datos", exported: "Exportación lista", imported: "Importación completa",
     importFailed: "Importación falló", persistenceOn: "Persistencia solicitada", persistenceLimited: "El navegador decide", cleared: "Historial borrado",
     reset: "Datos locales reiniciados", savedItems: "Guardados", collections: "Colecciones", provenance: "Procedencia", creator: "Creador", license: "Licencia",
-    reason: "¿Por qué?", openBasis: "Elemento verificado como abierto", sourceHealth: "Estado de la fuente", whyOpen: "¿Por qué abierto?", attribution: "Atribución",
+    reason: "¿Por qué?", graphPath: "Ruta del grafo", graphRoot: "Tema resuelto", openBasis: "Elemento verificado como abierto", sourceHealth: "Estado de la fuente", whyOpen: "¿Por qué abierto?", attribution: "Atribución",
     downloadRules: "Descarga", openSourceFile: "Abrir archivo fuente"
   },
   ar: {
@@ -42,7 +42,7 @@ export const messages = {
     import: "استيراد", clearHistory: "مسح السجل", resetData: "إعادة ضبط البيانات", exported: "التصدير جاهز", imported: "اكتمل الاستيراد",
     importFailed: "فشل الاستيراد", persistenceOn: "طُلب الحفظ المستمر", persistenceLimited: "المتصفح يقرر", cleared: "مُسح السجل",
     reset: "أُعيد ضبط البيانات المحلية", savedItems: "المحفوظات", collections: "المجموعات", provenance: "المصدر", creator: "المنشئ", license: "الرخصة",
-    reason: "لماذا؟", openBasis: "عنصر مفتوح موثّق", sourceHealth: "حالة المصدر", whyOpen: "لماذا مفتوح؟", attribution: "النسبة",
+    reason: "لماذا؟", graphPath: "مسار الرسم", graphRoot: "الموضوع المحدد", openBasis: "عنصر مفتوح موثّق", sourceHealth: "حالة المصدر", whyOpen: "لماذا مفتوح؟", attribution: "النسبة",
     downloadRules: "التنزيل", openSourceFile: "فتح الملف الأصلي"
   }
 };
