@@ -48,7 +48,16 @@ function createFixtureConnector({ id, sourceIds, originalRightsRecheck = false }
     async extractRights(record, { registry = SOURCE_REGISTRY } = {}) {
       const source = getSource(record.sourceId, registry);
       const sourceUrl = originalRightsRecheck ? record.originalSourceUrl || record.sourceUrl : record.sourceUrl;
-      return evaluateRights(record.rights, { sourceId: source.id, sourceName: source.name, sourceUrl });
+      return evaluateRights(record.rights, {
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceUrl: record.sourceUrl,
+        originalSourceUrl: sourceUrl,
+        mediaUrl: record.media?.url,
+        metadataUrl: record.sourceUrl,
+        title: record.title,
+        creatorNames: record.creators?.map((creator) => creator.name)
+      });
     },
     async fetchMedia(record) {
       return { ...record.media, status: record.media?.url ? "available" : "metadata-only" };
