@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Bookmark, BookmarkCheck, Check, CheckCircle2, Compass, Database, Download, Eraser, FileInput, Globe2, HardDrive, Languages, Music2, RotateCcw, Search } from "lucide-react";
-import { canonicalMoroccoSample } from "@openscroll/content";
+import { createOpenScrollGraphBundle } from "@openscroll/content";
 import AppShell from "./app-shell";
 import { Chip, IconButton, Sheet, Toast } from "./primitives";
 import { directionFor, formatItemCount, messages as catalog } from "../i18n/messages";
@@ -23,15 +23,16 @@ import {
   updateLocalSettings
 } from "../lib/preferences";
 
-const TOPICS = [["Music", Music2], ["Darija", Languages], ["Architecture", Compass], ["History", BookOpen], ["Open data", Database], ["Culture", Globe2]];
-const TOPIC_ORDER = TOPICS.map(([topic]) => topic);
+const TOPIC_ICONS = { Music: Music2, Darija: Languages, Architecture: Compass, History: BookOpen, "Open data": Database, Culture: Globe2 };
 const ICON_BY_KIND = { audio: Music2, dictionary: Languages, "travel-guide": Compass, article: BookOpen, image: Globe2, video: Globe2, map: Database, dataset: Database, "museum-object": Globe2, "source-text": BookOpen, "knowledge-entity": Globe2 };
 const CARD_COLORS = ["#415f4a", "#a95e38", "#607386", "#76664f", "#4f6c75", "#7c5e4a", "#566954", "#7a6a84"];
-const CARDS = canonicalMoroccoSample.map((object, index) => {
-  const topic = object.knowledge.topics.find((item) => TOPIC_ORDER.includes(item)) || "Culture";
+function cardFromMatch(match, index) {
+  const object = match.object;
+  const topic = match.explanation.primaryTopic || object.knowledge.topics[0] || "Culture";
   return {
     id: object.id,
     topic,
+    matchedTopics: match.explanation.matchedTopics,
     title: object.content.title,
     original: object.content.originalTitle,
     source: object.source.name,
@@ -43,7 +44,9 @@ const CARDS = canonicalMoroccoSample.map((object, index) => {
     downloadRule: object.rights.downloadPolicy.notice,
     downloadAllowed: object.rights.downloadPolicy.allowed,
     downloadUrl: object.rights.downloadPolicy.files.mediaUrl || object.identity.originalSourceUrl,
-    reason: `${topic} from ${object.knowledge.collection}`,
+    reason: match.explanation.reason,
+    graphPath: match.explanation.pathLabels.join(" > "),
+    graphEvidence: match.explanation.evidence,
     sourceHealth: object.system.sourceHealth,
     rightsSnapshot: {
       basis: object.rights.whyOpen.basis,
@@ -54,11 +57,18 @@ const CARDS = canonicalMoroccoSample.map((object, index) => {
       downloadAllowed: object.rights.downloadPolicy.allowed,
       downloadNotice: object.rights.downloadPolicy.notice
     },
+    graphSnapshot: {
+      path: match.explanation.path,
+      pathLabels: match.explanation.pathLabels,
+      matchedTopics: match.explanation.matchedTopics,
+      score: match.explanation.score,
+      reason: match.explanation.reason
+    },
     color: CARD_COLORS[index % CARD_COLORS.length],
     Icon: ICON_BY_KIND[object.media.kind] || Globe2,
     object
   };
-});
+}
 const MEDIA_LABELS = { images: "Images", audio: "Audio", video: "Video", text: "Text", data: "Data" };
 const SOURCE_LABELS = { wikimedia: "Wikimedia", openverse: "Openverse", smithsonian: "Smithsonian", europeana: "Europeana", dpla: "DPLA" };
 
@@ -84,6 +94,12 @@ export default function OpenScrollApp() {
   const importInput = useRef(null);
   const messages = catalog[locale] ?? catalog.en;
   const isRtl = directionFor(locale) === "rtl";
+  const graphBundle = useMemo(() => createOpenScrollGraphBundle({
+    interest: interest.trim() || "Morocco",
+    selectedTopics: [...selected],
+    settings: localState.settings
+  }), [interest, selected, localState.settings]);
+  const topicChoices = graphBundle.topicBranches.map((branch) => [branch.label, TOPIC_ICONS[branch.label] || Globe2, branch]);
 
   function applyJourneyState(nextState) {
     const saved = preferencesFromState(nextState);
@@ -146,7 +162,7 @@ export default function OpenScrollApp() {
 
   function openFeed() {
     if (!selected.size) { setToast(messages.empty); return; }
-    commitState(recordScrollCreation(localState, { interest: interest.trim(), topics: [...selected] }), messages.saved);
+    commitState(recordScrollCreation(localState, { interest: interest.trim(), topics: [...selected], graphSnapshot: graphBundle.interestGraph }), messages.saved);
     setStep(2);
   }
 
@@ -206,12 +222,12 @@ export default function OpenScrollApp() {
 
   const storageCopy = storageStatus.availability === "ready" ? messages.ready : messages.limited;
   const storageUse = storageEstimate.percent === null ? formatBytes(storageEstimate.usage) : `${storageEstimate.percent}%`;
-  const visibleCards = CARDS.filter((card) => selected.has(card.topic));
+  const visibleCards = graphBundle.contentMatches.map(cardFromMatch);
 
   return <AppShell activeNav={sheet === "settings" ? "settings" : step === 0 ? "search" : "explore"} feedMode={step === 2} messages={messages} onExplore={() => returnToExplore()} onSearch={() => returnToExplore({ focusInput: true })} onSettings={() => setSheet("settings")}>
     <main className={`journey ${isRtl ? "journey--rtl" : ""}`}>
       {step === 0 ? <section className="screen opening-screen" aria-labelledby="explore-title"><h1 id="explore-title">{messages.explore}</h1><form className="search-control" onSubmit={chooseInterest}><Search aria-hidden="true"/><label htmlFor="interest" className="sr-only">{messages.interest}</label><input ref={interestInput} id="interest" value={interest} onChange={(event) => setInterest(event.target.value)} placeholder={messages.placeholder} dir="auto" maxLength={120}/><IconButton className="submit-control" type="submit" disabled={!interest.trim()} label={messages.continue}><ArrowRight className="directional-icon" aria-hidden="true"/></IconButton></form></section> : null}
-      {step === 1 ? <section className="screen topic-screen" aria-label={messages.choose}><IconButton className="back-control" label={messages.back} onClick={() => back(0)}><ArrowLeft className="directional-icon" aria-hidden="true"/></IconButton><div className="topics">{TOPICS.map(([topic, Icon]) => <Chip key={topic} selected={selected.has(topic)} onClick={() => toggleTopic(topic)}>{selected.has(topic) ? <Check className="check" aria-hidden="true"/> : null}<Icon aria-hidden="true"/><span>{topic}</span></Chip>)}</div><IconButton className="build-control" label={`${messages.build}, ${formatItemCount(locale, selected.size)}`} onClick={openFeed} disabled={!selected.size}><ArrowRight className="directional-icon" aria-hidden="true"/></IconButton></section> : null}
+      {step === 1 ? <section className="screen topic-screen" aria-label={messages.choose}><IconButton className="back-control" label={messages.back} onClick={() => back(0)}><ArrowLeft className="directional-icon" aria-hidden="true"/></IconButton><div className="topics">{topicChoices.map(([topic, Icon]) => <Chip key={topic} selected={selected.has(topic)} onClick={() => toggleTopic(topic)}>{selected.has(topic) ? <Check className="check" aria-hidden="true"/> : null}<Icon aria-hidden="true"/><span>{topic}</span></Chip>)}</div><IconButton className="build-control" label={`${messages.build}, ${formatItemCount(locale, selected.size)}`} onClick={openFeed} disabled={!selected.size}><ArrowRight className="directional-icon" aria-hidden="true"/></IconButton></section> : null}
       {step === 2 ? <section className="feed" aria-label={`${interest} feed`}><header className="feed-header"><IconButton label={messages.back} onClick={() => back(1)}><ArrowLeft className="directional-icon" aria-hidden="true"/></IconButton><strong dir="auto">{interest}</strong><IconButton label={messages.details} onClick={() => setSheet("details")}><Globe2 aria-hidden="true"/></IconButton></header>{visibleCards.map((card) => {
         const Icon = card.Icon;
         const saved = localState.saves.some((save) => save.itemId === card.id);
@@ -226,7 +242,7 @@ export default function OpenScrollApp() {
           <section className="settings-section" aria-labelledby="source-setting"><h3 id="source-setting">{messages.sources}</h3><div className="toggle-grid">{Object.entries(SOURCE_LABELS).map(([key, label]) => <label className="toggle-pill" key={key}><input type="checkbox" checked={localState.settings.sources[key]} onChange={() => changeSettings({ sources: { [key]: !localState.settings.sources[key] } })}/><span>{label}</span></label>)}</div></section>
           <section className="settings-section" aria-labelledby="privacy-setting"><h3 id="privacy-setting">{messages.privacy}</h3><div className="toggle-grid"><label className="toggle-pill"><input type="checkbox" checked={localState.settings.privacy.saveHistory} onChange={() => changeSettings({ privacy: { saveHistory: !localState.settings.privacy.saveHistory } })}/><span>{messages.history}</span></label><label className="toggle-pill"><input type="checkbox" checked={localState.settings.accessibility.largeText} onChange={() => changeSettings({ accessibility: { largeText: !localState.settings.accessibility.largeText } })}/><span>{messages.largeText}</span></label><label className="toggle-pill"><input type="checkbox" checked={localState.settings.accessibility.reducedMotion} onChange={() => changeSettings({ accessibility: { reducedMotion: !localState.settings.accessibility.reducedMotion } })}/><span>{messages.reducedMotion}</span></label></div></section>
           <section className="settings-section" aria-labelledby="storage-setting"><h3 id="storage-setting">{messages.storage}</h3><dl className="storage-status"><div><dt>{messages.status}</dt><dd>{storageCopy}</dd></div><div><dt>{messages.used}</dt><dd>{storageUse}</dd></div><div><dt>{messages.persistence}</dt><dd>{storageEstimate.persisted ? messages.protected : messages.bestEffort}</dd></div><div><dt>{messages.savedItems}</dt><dd>{formatItemCount(locale, localState.saves.length)}</dd></div></dl><div className="settings-actions"><button type="button" className="storage-button" onClick={requestPersistence}><HardDrive aria-hidden="true"/>{messages.keep}</button><button type="button" className="storage-button" onClick={exportData}><Download aria-hidden="true"/>{messages.export}</button><button type="button" className="storage-button" onClick={() => importInput.current?.click()}><FileInput aria-hidden="true"/>{messages.import}</button><button type="button" className="storage-button" onClick={() => commitState(clearLocalHistory(localState), messages.cleared)}><Eraser aria-hidden="true"/>{messages.clearHistory}</button><button type="button" className="storage-button storage-button--danger" onClick={resetData}><RotateCcw aria-hidden="true"/>{messages.resetData}</button><input ref={importInput} className="sr-only" type="file" accept="application/json" onChange={importData}/></div></section>
-        </div> : <div className="settings-panel"><p className="local-disclosure">{messages.localDisclosure}</p><dl className="storage-status"><div><dt>{messages.choose}</dt><dd>{formatItemCount(locale, selected.size)}</dd></div><div><dt>{messages.savedItems}</dt><dd>{formatItemCount(locale, localState.saves.length)}</dd></div><div><dt>{messages.collections}</dt><dd>{formatItemCount(locale, localState.collections.length)}</dd></div><div><dt>{messages.history}</dt><dd>{formatItemCount(locale, localState.history.length)}</dd></div></dl><section className="settings-section" aria-labelledby="provenance-setting"><h3 id="provenance-setting">{messages.provenance}</h3><div className="provenance-list">{visibleCards.map((card) => <article className="provenance-item" key={card.id}><h4 dir="auto">{locale === "ar" ? card.original : card.title}</h4><dl><div><dt>{messages.source}</dt><dd>{card.source}</dd></div><div><dt>{messages.creator}</dt><dd>{card.creator}</dd></div><div><dt>{messages.license}</dt><dd>{card.license}</dd></div><div><dt>{messages.attribution}</dt><dd>{card.attribution}</dd></div><div><dt>{messages.whyOpen}</dt><dd>{card.openBasis}</dd></div><div><dt>{messages.downloadRules}</dt><dd>{card.downloadRule}</dd></div><div><dt>{messages.reason}</dt><dd>{card.reason}</dd></div><div><dt>{messages.sourceHealth}</dt><dd>{card.sourceHealth}</dd></div></dl><ul className="rights-bullets">{card.whyOpen.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>{card.downloadAllowed ? <a className="rights-link" href={card.downloadUrl} target="_blank" rel="noreferrer">{messages.openSourceFile}</a> : null}</article>)}</div></section></div>}
+        </div> : <div className="settings-panel"><p className="local-disclosure">{messages.localDisclosure}</p><dl className="storage-status"><div><dt>{messages.graphRoot}</dt><dd>{graphBundle.entityResolution.selected?.label || interest}</dd></div><div><dt>{messages.choose}</dt><dd>{formatItemCount(locale, selected.size)}</dd></div><div><dt>{messages.savedItems}</dt><dd>{formatItemCount(locale, localState.saves.length)}</dd></div><div><dt>{messages.collections}</dt><dd>{formatItemCount(locale, localState.collections.length)}</dd></div><div><dt>{messages.history}</dt><dd>{formatItemCount(locale, localState.history.length)}</dd></div></dl><section className="settings-section" aria-labelledby="provenance-setting"><h3 id="provenance-setting">{messages.provenance}</h3><div className="provenance-list">{visibleCards.map((card) => <article className="provenance-item" key={card.id}><h4 dir="auto">{locale === "ar" ? card.original : card.title}</h4><dl><div><dt>{messages.source}</dt><dd>{card.source}</dd></div><div><dt>{messages.creator}</dt><dd>{card.creator}</dd></div><div><dt>{messages.license}</dt><dd>{card.license}</dd></div><div><dt>{messages.attribution}</dt><dd>{card.attribution}</dd></div><div><dt>{messages.whyOpen}</dt><dd>{card.openBasis}</dd></div><div><dt>{messages.downloadRules}</dt><dd>{card.downloadRule}</dd></div><div><dt>{messages.graphPath}</dt><dd>{card.graphPath}</dd></div><div><dt>{messages.reason}</dt><dd>{card.reason}</dd></div><div><dt>{messages.sourceHealth}</dt><dd>{card.sourceHealth}</dd></div></dl><ul className="rights-bullets">{card.whyOpen.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul>{card.downloadAllowed ? <a className="rights-link" href={card.downloadUrl} target="_blank" rel="noreferrer">{messages.openSourceFile}</a> : null}</article>)}</div></section></div>}
       </Sheet><Toast message={toast}/>
     </main>
   </AppShell>;
