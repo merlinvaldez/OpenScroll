@@ -16,6 +16,7 @@ function source(record) {
       acceptedLicenses: unique(record.rightsModel?.acceptedLicenses || ["cc0", "public-domain", "public-domain-mark", "cc-by-4.0", "cc-by-sa-4.0", "cc-by-3.0", "cc-by-sa-3.0"]),
       verifyAtSource: true,
       failClosed: true,
+      reviewQueue: "rights-review",
       ...record.rightsModel
     },
     quality: {
@@ -73,6 +74,7 @@ export function validateSourceRecord(record) {
   if (!record?.rateLimit?.requestsPerMinute) errors.push("source.rateLimit.requestsPerMinute is required");
   if (!record?.contentTypes?.length || record.contentTypes.some((type) => !CONTENT_TYPES.includes(type))) errors.push("source.contentTypes must use supported content types");
   if (!record?.rightsModel?.verifyAtSource || !record?.rightsModel?.failClosed) errors.push("source rights must verify at source and fail closed");
+  if (!record?.rightsModel?.reviewQueue) errors.push("source rights must define a review queue");
   if (!SOURCE_HEALTH.includes(record?.health?.status)) errors.push("source.health.status is invalid");
   return { valid: errors.length === 0, errors };
 }
