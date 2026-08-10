@@ -1,5 +1,5 @@
 import { validateUniversalContentObject } from "./content-object.js";
-import { isEligibleRights } from "./rights.js";
+import { createOpenLicenseGateDecision, createRightsReviewCase } from "./rights.js";
 import { SOURCE_REGISTRY } from "./source-registry.js";
 import { cleanString, deepFreeze } from "./utils.js";
 
@@ -19,6 +19,7 @@ export async function runConnectorConformance(connector, options = {}) {
   const query = cleanString(options.query || "Morocco", 120);
   const checks = [];
   const rejected = [];
+  const reviewQueue = [];
   const objects = [];
   const health = await connector.healthcheck({ registry });
   checks.push({ name: "healthcheck", passed: Boolean(health?.status) });
@@ -29,8 +30,13 @@ export async function runConnectorConformance(connector, options = {}) {
   for (const candidate of candidates) {
     const fetched = await connector.fetch(candidate.id, { registry });
     const rights = await connector.extractRights(fetched, { registry });
-    if (!isEligibleRights(rights)) {
-      rejected.push({ id: fetched.id, sourceId: fetched.sourceId, reason: rights.rejectedReason });
+    const gate = createOpenLicenseGateDecision(rights, { itemId: fetched.sourceItemId || fetched.id, sourceId: fetched.sourceId });
+    if (gate.decision === "review") {
+      reviewQueue.push(createRightsReviewCase(fetched, gate));
+      continue;
+    }
+    if (gate.decision === "reject") {
+      rejected.push({ id: fetched.id, sourceId: fetched.sourceId, reason: gate.reason, gate });
       continue;
     }
     const media = await connector.fetchMedia(fetched, { registry });
@@ -48,6 +54,7 @@ export async function runConnectorConformance(connector, options = {}) {
     checks,
     objectCount: objects.length,
     rejected,
+    reviewQueue,
     objects,
     refresh
   });
