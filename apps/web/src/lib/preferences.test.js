@@ -52,12 +52,33 @@ test("scroll creation stores implicit history only when enabled", () => {
   assert.equal(noHistory.history.length, 0);
 });
 
+test("scroll creation stores sanitized Interest Graph snapshots locally", () => {
+  const state = recordScrollCreation(createDefaultLocalState(), {
+    interest: "Morocco",
+    topics: ["Music", "Darija"],
+    graphSnapshot: {
+      schemaVersion: "interest-graph.v1",
+      id: "interest-graph:morocco:music:darija",
+      root: { label: "Morocco", nodeId: "interest:morocco", entityId: "wd:Q1028", resolutionStatus: "resolved" },
+      selectedTopics: ["Music", "Darija"],
+      excludedTopics: ["Shopping"],
+      weights: { Music: 0.92, Darija: 0.84 },
+      preferences: { media: { video: false }, sources: { openverse: false }, languages: ["en", "ar"], depth: 3, surprise: 0.3 }
+    }
+  });
+  assert.equal(state.scrolls[0].graphSnapshot.root.entityId, "wd:Q1028");
+  assert.equal(state.scrolls[0].graphSnapshot.preferences.media.video, false);
+  assert.equal(state.scrolls[0].graphSnapshot.preferences.sources.openverse, false);
+  assert.deepEqual(state.scrolls[0].graphSnapshot.selectedTopics, ["Music", "Darija"]);
+});
+
 test("saves and explicit feedback remain browser-local records", () => {
-  const card = { id: "commons-gnawa-pulse", title: "The living pulse of Gnawa", source: "Wikimedia Commons", rightsSnapshot: { license: "CC BY-SA 4.0", attribution: "Commons contributor", obligations: ["attribution", "share-alike"], downloadAllowed: true, downloadNotice: "Allowed with attribution." } };
+  const card = { id: "commons-gnawa-pulse", title: "The living pulse of Gnawa", source: "Wikimedia Commons", rightsSnapshot: { license: "CC BY-SA 4.0", attribution: "Commons contributor", obligations: ["attribution", "share-alike"], downloadAllowed: true, downloadNotice: "Allowed with attribution." }, graphSnapshot: { path: ["wd:Q1028", "wd:Q1501622", "content:commons-gnawa-pulse"], pathLabels: ["Morocco", "Gnawa", "The living pulse of Gnawa"], matchedTopics: ["Music"], score: 0.94, reason: "Morocco connects to Music." } };
   const saved = toggleSavedItem(createDefaultLocalState(), card);
   assert.equal(saved.saves[0].itemId, card.id);
   assert.equal(saved.saves[0].rightsSnapshot.downloadAllowed, true);
   assert.deepEqual(saved.saves[0].rightsSnapshot.obligations, ["attribution", "share-alike"]);
+  assert.deepEqual(saved.saves[0].graphSnapshot.matchedTopics, ["Music"]);
   assert.equal(saved.collections[0].id, "collection:saved");
   const feedback = recordExplicitFeedback(saved, card);
   assert.equal(feedback.feedback[0].signal, "explicit");
