@@ -8,12 +8,13 @@
     "start": "next start",
     "build": "next build",
     "lint": "eslint app apps/web/src packages tests",
-    "test": "node --test packages/contracts/test/*.test.js apps/web/src/**/*.test.js",
+    "test": "node --test packages/contracts/test/*.test.js packages/content/test/*.test.js apps/web/src/**/*.test.js",
     "test:contracts": "node scripts/check-contracts.mjs",
     "test:a11y": "playwright test --config=tests/playwright.config.js",
     "check": "npm run lint && npm test && npm run test:contracts && npm run build"
   },
   "dependencies": {
+    "@openscroll/content": "*",
     "@openscroll/contracts": "*",
     "@openscroll/design-tokens": "*",
     "lucide-react": "^0.468.0",

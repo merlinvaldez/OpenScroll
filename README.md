@@ -6,6 +6,8 @@ Epic A (OS-001 through OS-008) is implemented as the production foundation, incl
 
 Epic B (OS-009 through OS-012) implements the no-auth local-first layer: versioned IndexedDB storage, browser-local Scroll continuity, local saves and explicit feedback, settings and storage controls, export/import, history clearing, full local reset, and fallback behavior for limited browser storage modes.
 
+Epic C (OS-013 through OS-020) implements the source and content platform foundation: Universal Content Objects, Source Registry governance, connector SDK conformance, ingestion orchestration, and verified-open fixture connectors for Wikimedia knowledge projects, Wikimedia Commons, Openverse, Smithsonian Open Access, Europeana, and DPLA.
+
 ## Commands
 
 ```bash
