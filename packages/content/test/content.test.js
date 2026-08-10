@@ -5,6 +5,8 @@ import {
   SOURCE_REGISTRY,
   canonicalMoroccoSample,
   createConnector,
+  createLiveSourceConnectorsFromEnv,
+  createSourceApiClientsFromEnv,
   contentItemsForTopic,
   createContentGraph,
   createInterestGraph,
@@ -17,11 +19,15 @@ import {
   createSeedKnowledgeGraph,
   createUniversalContentObject,
   evaluateRights,
+  getSource,
   getLicenseRecord,
   ingestKnowledgeGraph,
   normalizeLicenseId,
   resolveEntity,
+  requestDplaApiKey,
   openLicenseGate,
+  registerOpenverseApplication,
+  sourceCredentialStatus,
   topicBranchesForInterest,
   traverseGraph,
   runConnectorConformance,
@@ -58,6 +64,8 @@ test("OS-014 Source Registry stores behavior, rights, quality, refresh, terms, a
     assert.ok(source.refresh.cadence);
     assert.ok(source.health.status);
   }
+  assert.equal(getSource("openverse").auth.type, "oauth-client-credentials");
+  assert.equal(getSource("smithsonian-open-access").auth.type, "api-key");
 });
 
 test("OS-015 through OS-020 connectors pass the SDK conformance suite", async () => {
@@ -235,6 +243,204 @@ test("OS-032 Graph relationship APIs expose topic branches, traversals, ranked m
   assert.ok(traversal.paths.length);
   const branches = topicBranchesForInterest({ knowledgeGraph: bundle.knowledgeGraph, contentGraph: bundle.contentGraph, entityResolution: bundle.entityResolution });
   assert.ok(branches.every((branch) => branch.path[0] === "wd:Q1028"));
+});
+
+test("source API credentials report setup without exposing secret values", () => {
+  const status = sourceCredentialStatus({
+    EUROPEANA_API_KEY: "secret-europeana",
+    SMITHSONIAN_API_KEY: "secret-smithsonian",
+    DPLA_REQUEST_EMAIL: "reader@example.com",
+    OPENSCROLL_CONTACT_EMAIL: "reader@example.com"
+  });
+  assert.equal(status.valuesExposed, false);
+  assert.equal(status.sources.europeana.configured, true);
+  assert.equal(status.sources["smithsonian-open-access"].configured, true);
+  assert.equal(status.sources.dpla.configured, false);
+  assert.equal(status.sources.dpla.requestEmailConfigured, true);
+  assert.equal(status.sources.openverse.configured, false);
+  assert.equal(status.sources.openverse.mode, "oauth-client-credentials");
+  assert.doesNotMatch(JSON.stringify(status), /secret-europeana|secret-smithsonian/);
+});
+
+test("source API clients build provider-specific authenticated requests and normalize open records", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    const href = String(url);
+    if (href.includes("europeana")) {
+      return {
+        ok: true,
+        json: async () => ({
+          items: [{
+            id: "/2048123/fez_postcard",
+            title: ["Fez postcard"],
+            dcDescription: ["Historic view of Fez."],
+            dataProvider: ["Holding institution"],
+            dcCreator: ["Postcard maker"],
+            year: ["1912"],
+            edmPlaceLabel: ["Fez, Morocco"],
+            language: ["fr"],
+            type: "IMAGE",
+            guid: "https://www.europeana.eu/item/2048123/fez_postcard",
+            edmPreview: ["https://example.org/europeana/fez.jpg"],
+            rights: ["http://creativecommons.org/publicdomain/mark/1.0/"]
+          }]
+        })
+      };
+    }
+    if (href.includes("api.si.edu")) {
+      return {
+        ok: true,
+        json: async () => ({
+          response: {
+            rows: [{
+              id: "edanmdm:nmafa_robe",
+              title: "Moroccan robe",
+              content: {
+                descriptiveNonRepeating: {
+                  record_ID: "edanmdm:nmafa_robe",
+                  record_link: "https://www.si.edu/object/moroccan-robe",
+                  data_source: "National Museum of African Art",
+                  online_media: { media: [{ content: "https://ids.si.edu/ids/deliveryService?id=robe", thumbnail: "https://ids.si.edu/ids/deliveryService?id=robe-thumb" }] }
+                },
+                freetext: {
+                  name: [{ content: "Unknown Moroccan maker" }],
+                  date: [{ content: "1900" }]
+                },
+                indexedStructured: {
+                  place: ["Morocco"],
+                  topic: ["Culture"],
+                  object_type: ["Robe"]
+                }
+              }
+            }]
+          }
+        })
+      };
+    }
+    if (href.includes("api.dp.la/v2/items")) {
+      return {
+        ok: true,
+        json: async () => ({
+          docs: [{
+            id: "dpla-map",
+            isShownAt: "https://dp.la/item/dpla-map",
+            object: "https://example.org/dpla/map.jpg",
+            provider: { name: "Library holding institution" },
+            sourceResource: {
+              title: "Historic map of Morocco",
+              description: "A map record.",
+              creator: "Cartographer",
+              date: { displayDate: "1900", begin: "1900" },
+              spatial: { name: "Morocco" },
+              language: { name: "English" },
+              subject: [{ name: "History" }],
+              type: "map",
+              rights: "Public Domain"
+            }
+          }]
+        })
+      };
+    }
+    if (href.includes("api.openverse.org/v1/token")) {
+      return { ok: true, json: async () => ({ access_token: "token-value", expires_in: 3600 }) };
+    }
+    if (href.includes("api.openverse.org/v1/images")) {
+      return {
+        ok: true,
+        json: async () => ({
+          results: [{
+            id: "openverse-image",
+            title: "Ait Benhaddou",
+            creator: "Original photographer",
+            url: "https://example.org/openverse/image.jpg",
+            thumbnail: "https://example.org/openverse/thumb.jpg",
+            foreign_landing_url: "https://example.org/original",
+            detail_url: "https://openverse.org/image/openverse-image",
+            license_url: "https://creativecommons.org/licenses/by/4.0/",
+            width: 1200,
+            height: 800,
+            tags: [{ name: "Architecture" }]
+          }]
+        })
+      };
+    }
+    throw new Error(`Unexpected URL: ${href}`);
+  };
+
+  const clients = createSourceApiClientsFromEnv(
+    {
+      EUROPEANA_API_KEY: "eu-key",
+      SMITHSONIAN_API_KEY: "si-key",
+      DPLA_API_KEY: "dpla-key",
+      OPENVERSE_CLIENT_ID: "ov-id",
+      OPENVERSE_CLIENT_SECRET: "ov-secret",
+      OPENSCROLL_CONTACT_EMAIL: "reader@example.com"
+    },
+    { fetchImpl }
+  );
+
+  const [europeana] = await clients.europeana.search({ query: "Fez", rows: 1 });
+  const [smithsonian] = await clients.smithsonian.search({ query: "Morocco", rows: 1 });
+  const [dpla] = await clients.dpla.search({ query: "Morocco", rows: 1 });
+  const [openverse] = await clients.openverse.searchImages({ query: "Ait Benhaddou", rows: 1 });
+
+  for (const record of [europeana, smithsonian, dpla]) {
+    const object = createUniversalContentObject(record);
+    assert.equal(validateUniversalContentObject(object).valid, true);
+    assert.equal(object.rights.eligibility, "eligible");
+  }
+
+  assert.equal(evaluateRights(openverse.rights, { sourceId: "openverse", sourceName: "Openverse" }).eligibility, "review");
+  assert.equal(calls.find((call) => String(call.url).includes("europeana")).url.searchParams.get("reusability"), "open");
+  assert.equal(calls.find((call) => String(call.url).includes("api.si.edu")).url.searchParams.get("api_key"), "si-key");
+  assert.equal(calls.find((call) => String(call.url).includes("api.dp.la/v2/items")).url.searchParams.get("api_key"), "dpla-key");
+  assert.match(String(calls.find((call) => String(call.url).includes("api.openverse.org/v1/token")).options.body), /grant_type=client_credentials/);
+  assert.equal(calls.find((call) => String(call.url).includes("api.openverse.org/v1/images")).options.headers.Authorization, "Bearer token-value");
+});
+
+test("DPLA and Openverse credential helpers implement provider-specific request flows", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (String(url).includes("api.dp.la")) return { ok: true, json: async () => ({ message: "API key created and sent via email." }) };
+    return { ok: true, json: async () => ({ client_id: "client-id", client_secret: "client-secret" }) };
+  };
+
+  const dpla = await requestDplaApiKey({ email: "reader@example.com", fetchImpl });
+  const openverse = await registerOpenverseApplication({ email: "reader@example.com", fetchImpl });
+
+  assert.equal(dpla.requested, true);
+  assert.equal(calls[0].options.method, "POST");
+  assert.match(String(calls[0].url), /api_key\/reader%40example.com$/);
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].options.headers["Content-Type"], "application/json");
+  assert.equal(openverse.clientId, "client-id");
+  assert.equal(openverse.clientSecret, "client-secret");
+});
+
+test("live source connectors use configured API clients without replacing fixture connectors", async () => {
+  const fetchImpl = async (url) => {
+    const href = String(url);
+    if (href.includes("europeana")) return { ok: true, json: async () => ({ items: [] }) };
+    if (href.includes("api.si.edu")) return { ok: true, json: async () => ({ response: { rows: [] } }) };
+    if (href.includes("api.dp.la")) return { ok: true, json: async () => ({ docs: [] }) };
+    if (href.includes("api.openverse.org/v1/token")) return { ok: true, json: async () => ({ access_token: "token-value", expires_in: 3600 }) };
+    if (href.includes("api.openverse.org/v1/images")) return { ok: true, json: async () => ({ results: [] }) };
+    throw new Error(`Unexpected URL: ${href}`);
+  };
+  const connectors = createLiveSourceConnectorsFromEnv({
+    EUROPEANA_API_KEY: "eu-key",
+    SMITHSONIAN_API_KEY: "si-key",
+    DPLA_API_KEY: "dpla-key",
+    OPENVERSE_CLIENT_ID: "ov-id",
+    OPENVERSE_CLIENT_SECRET: "ov-secret"
+  }, { fetchImpl });
+  assert.deepEqual(connectors.map((connector) => connector.id), ["openverse-api", "cultural-aggregators-api"]);
+  for (const connector of connectors) {
+    const result = await runConnectorConformance(connector, { query: "Morocco" });
+    assert.equal(result.passed, true, JSON.stringify(result.checks));
+  }
 });
 
 test("Epic C content platform excludes consumer accounts and publishing vocabulary", () => {
