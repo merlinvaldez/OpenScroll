@@ -1,10 +1,10 @@
 # Environments
 
-| Environment | Purpose | Deployment |
+| Environment | Configuration | Deployment rule |
 | --- | --- | --- |
-| Local | Development and component testing | `npm run dev` |
-| Test | Unit and browser automation | CI runner |
-| Preview | Review each proposed change | Vercel preview |
-| Production | Public approved build | Vercel production |
+| Local | `.env.local`, never committed | Developer machine |
+| Test | CI-injected variables | Every pull request |
+| Staging | Vercel Preview variables | Preview branch deployment |
+| Production | Vercel Production variables | Protected `main` deployment |
 
-Epic A requires no secrets. Future environment keys must be documented in `.env.example`, stored outside Git, and validated by name without printing values.
+Epic A requires no secrets. Future secrets must be stored in the deployment provider, represented by name in `.env.example`, and never prefixed `NEXT_PUBLIC_` unless intentionally public. Database migrations must expose a deterministic `migrate` script before a datastore is introduced.

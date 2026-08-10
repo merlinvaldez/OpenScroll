@@ -1,5 +1,2 @@
-import FoundationShowcase from "../apps/web/src/components/foundation-showcase";
-
-export default function Home() {
-  return <FoundationShowcase />;
-}
+import OpenScrollApp from "../apps/web/src/components/open-scroll-app";
+export default function Home() { return <OpenScrollApp />; }

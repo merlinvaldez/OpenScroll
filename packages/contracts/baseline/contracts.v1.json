@@ -1,0 +1,1 @@
+{"api":"https://openscroll.app/contracts/api-envelope.v1.json","errorRequired":["code","message","requestId"],"paginationRequired":["nextCursor","hasMore"],"events":["interest.entered.v1","preference.changed-local.v1","scroll.created.v1","topic.selected.v1"]}

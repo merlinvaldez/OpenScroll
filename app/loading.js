@@ -1,0 +1,1 @@
+export default function Loading() { return <main className="system-state" aria-busy="true"><span className="skeleton skeleton--title"/><span className="skeleton skeleton--control"/><span className="sr-only">Loading OpenScroll</span></main>; }

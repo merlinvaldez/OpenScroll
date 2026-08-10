@@ -1,36 +1,3 @@
-export const errorEnvelopeSchema = Object.freeze({
-  $id: "https://openscroll.app/contracts/error-envelope.v1.json",
-  type: "object",
-  additionalProperties: false,
-  required: ["code", "message", "requestId"],
-  properties: {
-    code: { type: "string", pattern: "^[A-Z][A-Z0-9_]+$" },
-    message: { type: "string", minLength: 1 },
-    requestId: { type: "string", minLength: 1 },
-    details: { type: "object" }
-  }
-});
-
-export const paginationSchema = Object.freeze({
-  $id: "https://openscroll.app/contracts/pagination.v1.json",
-  type: "object",
-  additionalProperties: false,
-  required: ["nextCursor", "hasMore"],
-  properties: {
-    nextCursor: { type: ["string", "null"] },
-    hasMore: { type: "boolean" }
-  }
-});
-
-export const apiEnvelopeSchema = Object.freeze({
-  $id: "https://openscroll.app/contracts/api-envelope.v1.json",
-  type: "object",
-  additionalProperties: false,
-  required: ["version", "requestId", "data"],
-  properties: {
-    version: { const: "1" },
-    requestId: { type: "string", minLength: 1 },
-    data: {},
-    pagination: paginationSchema
-  }
-});
+export const errorEnvelopeSchema = Object.freeze({ $id: "https://openscroll.app/contracts/error-envelope.v1.json", type: "object", additionalProperties: false, required: ["code", "message", "requestId"], properties: { code: { type: "string", pattern: "^[A-Z][A-Z0-9_]+$" }, message: { type: "string", minLength: 1 }, requestId: { type: "string", minLength: 1 }, details: { type: "object" } } });
+export const paginationSchema = Object.freeze({ $id: "https://openscroll.app/contracts/pagination.v1.json", type: "object", additionalProperties: false, required: ["nextCursor", "hasMore"], properties: { nextCursor: { type: ["string", "null"] }, hasMore: { type: "boolean" } } });
+export const apiEnvelopeSchema = Object.freeze({ $id: "https://openscroll.app/contracts/api-envelope.v1.json", type: "object", additionalProperties: false, required: ["version", "requestId", "data"], properties: { version: { const: "1" }, requestId: { type: "string", minLength: 1 }, data: {}, pagination: paginationSchema } });

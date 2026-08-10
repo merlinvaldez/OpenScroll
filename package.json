@@ -5,16 +5,27 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "next dev",
+    "start": "next start",
     "build": "next build",
-    "lint": "npm run lint --workspace=@openscroll/web",
-    "test": "node --test packages/contracts/test/*.test.js",
-    "test:a11y": "playwright test --config=tests/playwright.config.js"
+    "lint": "eslint app apps/web/src packages tests",
+    "test": "node --test packages/contracts/test/*.test.js apps/web/src/**/*.test.js",
+    "test:contracts": "node scripts/check-contracts.mjs",
+    "test:a11y": "playwright test --config=tests/playwright.config.js",
+    "check": "npm run lint && npm test && npm run test:contracts && npm run build"
   },
   "dependencies": {
+    "@openscroll/contracts": "*",
+    "@openscroll/design-tokens": "*",
     "lucide-react": "^0.468.0",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.49.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0"
   },
   "engines": { "node": ">=22" }
 }
