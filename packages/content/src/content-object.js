@@ -34,7 +34,18 @@ export function createUniversalContentObject(record, options = {}) {
   const source = getSource(record.sourceId, registry);
   if (!source) throw new Error(`Unknown source: ${record.sourceId}`);
   const retrievedAt = isoDate(options.now || record.retrievedAt);
-  const rights = evaluateRights(record.rights, { sourceId: source.id, sourceName: source.name, sourceUrl: record.sourceUrl, now: retrievedAt });
+  const creatorNames = asArray(record.creators).map((creator) => cleanString(creator.name, 160)).filter(Boolean);
+  const rights = evaluateRights(record.rights, {
+    sourceId: source.id,
+    sourceName: source.name,
+    sourceUrl: record.sourceUrl,
+    originalSourceUrl: record.originalSourceUrl || record.sourceUrl,
+    mediaUrl: record.media?.url,
+    metadataUrl: record.sourceUrl,
+    title: record.title,
+    creatorNames,
+    now: retrievedAt
+  });
   const places = asArray(record.places).map((place) => ({
     label: cleanString(place.label, 120),
     countryCode: cleanString(place.countryCode, 8).toUpperCase(),

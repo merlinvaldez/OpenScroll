@@ -129,7 +129,11 @@ function cleanSave(record) {
     rightsSnapshot: {
       basis: cleanString(record?.rightsSnapshot?.basis || "verified-open-source-item", 80),
       source: cleanString(record?.rightsSnapshot?.source || record?.source, 120),
-      license: cleanString(record?.rightsSnapshot?.license, 120)
+      license: cleanString(record?.rightsSnapshot?.license, 120),
+      attribution: cleanString(record?.rightsSnapshot?.attribution, 360),
+      obligations: cleanRecords(record?.rightsSnapshot?.obligations, (item) => cleanString(item, 80), 12),
+      downloadAllowed: record?.rightsSnapshot?.downloadAllowed === true,
+      downloadNotice: cleanString(record?.rightsSnapshot?.downloadNotice, 200)
     }
   };
 }
@@ -273,7 +277,11 @@ export function toggleSavedItem(state, item) {
       rightsSnapshot: {
         basis: cleanString(item.rightsSnapshot?.basis || "verified-open-source-item", 80),
         source: cleanString(item.rightsSnapshot?.source || item.source, 120),
-        license: cleanString(item.rightsSnapshot?.license, 120)
+        license: cleanString(item.rightsSnapshot?.license, 120),
+        attribution: cleanString(item.rightsSnapshot?.attribution, 360),
+        obligations: cleanRecords(item.rightsSnapshot?.obligations, (entry) => cleanString(entry, 80), 12),
+        downloadAllowed: item.rightsSnapshot?.downloadAllowed === true,
+        downloadNotice: cleanString(item.rightsSnapshot?.downloadNotice, 200)
       }
     }, ...localState.saves]
   }, timestamp);

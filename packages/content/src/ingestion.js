@@ -1,5 +1,5 @@
 import { validateUniversalContentObject } from "./content-object.js";
-import { isEligibleRights } from "./rights.js";
+import { createOpenLicenseGateDecision, createRightsReviewCase } from "./rights.js";
 import { SOURCE_REGISTRY } from "./source-registry.js";
 import { cleanString, deepFreeze, slug } from "./utils.js";
 
@@ -32,6 +32,7 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
   const jobs = [];
   const checkpoints = [];
   const rejected = [];
+  const reviewQueue = [];
   const deadLetters = [];
   for (const connector of connectors) {
     const job = createIngestionJob({ connectorId: connector.id, sourceIds: connector.sourceIds, query });
@@ -44,8 +45,13 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
       for (const candidate of candidates) {
         const fetched = await connector.fetch(candidate.id, { registry });
         const rights = await connector.extractRights(fetched, { registry });
-        if (!isEligibleRights(rights)) {
-          rejected.push({ id: fetched.id, sourceId: fetched.sourceId, connectorId: connector.id, reason: rights.rejectedReason });
+        const gate = createOpenLicenseGateDecision(rights, { itemId: fetched.sourceItemId || fetched.id, sourceId: fetched.sourceId });
+        if (gate.decision === "review") {
+          reviewQueue.push({ ...createRightsReviewCase(fetched, gate), connectorId: connector.id });
+          continue;
+        }
+        if (gate.decision === "reject") {
+          rejected.push({ id: fetched.id, sourceId: fetched.sourceId, connectorId: connector.id, reason: gate.reason, gate });
           continue;
         }
         const media = await connector.fetchMedia(fetched, { registry });
@@ -79,6 +85,7 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
     checkpoints,
     objects: [...objectsById.values()],
     rejected,
+    reviewQueue,
     deadLetters
   });
 }

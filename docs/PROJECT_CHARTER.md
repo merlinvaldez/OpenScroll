@@ -1,7 +1,7 @@
 # OpenScroll Project Charter
 
-**Status:** Active delivery; Epic C complete and Epic D next  
-**Version:** 1.4  
+**Status:** Active delivery; Epic D implementation in review  
+**Version:** 1.5  
 **Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
@@ -366,6 +366,8 @@ Every ticket is complete only when:
 | OS-020 | **Integrate major cultural aggregators.** As a user, I want material from Smithsonian, Europeana, and DPLA. | Each connector supports search/fetch, item-level rights, institution/collection, IIIF where present, media renditions, and source links; open metadata is separated from media rights. | OS-015, OS-021 |
 
 ### Epic D: Rights, licensing, and attribution
+
+**Status:** Implementation in review. OS-021 through OS-027 are included in the Epic D pull request for acceptance.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |

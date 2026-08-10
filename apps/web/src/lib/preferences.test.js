@@ -53,9 +53,11 @@ test("scroll creation stores implicit history only when enabled", () => {
 });
 
 test("saves and explicit feedback remain browser-local records", () => {
-  const card = { id: "commons-gnawa-pulse", title: "The living pulse of Gnawa", source: "Wikimedia Commons" };
+  const card = { id: "commons-gnawa-pulse", title: "The living pulse of Gnawa", source: "Wikimedia Commons", rightsSnapshot: { license: "CC BY-SA 4.0", attribution: "Commons contributor", obligations: ["attribution", "share-alike"], downloadAllowed: true, downloadNotice: "Allowed with attribution." } };
   const saved = toggleSavedItem(createDefaultLocalState(), card);
   assert.equal(saved.saves[0].itemId, card.id);
+  assert.equal(saved.saves[0].rightsSnapshot.downloadAllowed, true);
+  assert.deepEqual(saved.saves[0].rightsSnapshot.obligations, ["attribution", "share-alike"]);
   assert.equal(saved.collections[0].id, "collection:saved");
   const feedback = recordExplicitFeedback(saved, card);
   assert.equal(feedback.feedback[0].signal, "explicit");

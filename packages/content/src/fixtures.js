@@ -171,6 +171,22 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     rights: { licenseId: "cc-by-nc-4.0", sourceVerified: true, attribution: "Restricted photographer" }
   },
   {
+    id: "openverse-review-unverified",
+    sourceId: "openverse",
+    sourceItemId: "openverse:morocco-unverified",
+    sourceUrl: "https://openverse.org/image/example-unverified",
+    originalSourceUrl: "https://example.org/unverified/morocco",
+    type: "image",
+    title: "Unverified Morocco image",
+    description: "A candidate that looks open but must wait for source verification before entering the Scroll.",
+    creators: [{ name: "Unverified photographer", role: "photographer" }],
+    places: [{ label: "Morocco", countryCode: "MA" }],
+    languages: ["en"],
+    topics: ["Culture"],
+    media: { kind: "image", url: "https://example.org/unverified/morocco.jpg", accessibility: { altText: "Unverified photo candidate from Morocco" } },
+    rights: { licenseId: "cc-by-4.0", sourceVerified: false, attribution: "Unverified photographer" }
+  },
+  {
     id: "smithsonian-moroccan-robe",
     sourceId: "smithsonian-open-access",
     sourceItemId: "edanmdm:nmafa_robe_morocco",

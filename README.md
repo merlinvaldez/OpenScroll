@@ -8,6 +8,8 @@ Epic B (OS-009 through OS-012) implements the no-auth local-first layer: version
 
 Epic C (OS-013 through OS-020) implements the source and content platform foundation: Universal Content Objects, Source Registry governance, connector SDK conformance, ingestion orchestration, and verified-open fixture connectors for Wikimedia knowledge projects, Wikimedia Commons, Openverse, Smithsonian Open Access, Europeana, and DPLA.
 
+Epic D (OS-021 through OS-027) implements the rights foundation: normalized license ontology, Open License Gate, item-level source verification, rights-review queue, attribution engine, "Why open?" details, and rights-safe download policy.
+
 ## Commands
 
 ```bash
