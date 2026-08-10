@@ -1,7 +1,7 @@
 # OpenScroll Project Charter
 
-**Status:** Active delivery; Epic B implementation in review  
-**Version:** 1.2  
+**Status:** Active delivery; Epic B complete, Epic C next  
+**Version:** 1.3  
 **Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
@@ -341,7 +341,7 @@ Every ticket is complete only when:
 
 ### Epic B: Local-first preferences, continuity, and privacy
 
-**Status:** Implementation in review. OS-009 through OS-012 are included in the Epic B pull request for acceptance.
+**Status:** Complete. Merged to `main` in PR #5 on August 10, 2026; OS-009 through OS-012 are accepted as the local-first privacy and continuity foundation.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
@@ -351,6 +351,8 @@ Every ticket is complete only when:
 | OS-012 | **Implement local privacy and data lifecycle.** As a user, I want control over every locally stored personalization record. | Explicit and implicit signals are distinguishable; history clearing, selective deletion, complete local reset, portable export, validated import, and retention limits work end to end; telemetry remains separate and minimal. | OS-010 |
 
 ### Epic C: Universal content, source registry, and connectors
+
+**Status:** Next planned epic. OS-013 through OS-020 will establish canonical content objects, source governance, connector contracts, ingestion orchestration, and the first verified-open source integrations.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
