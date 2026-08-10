@@ -1,7 +1,7 @@
 # OpenScroll Project Charter
 
-**Status:** Active delivery; Epic D implementation in review  
-**Version:** 1.5  
+**Status:** Active delivery; Epic D complete; Epic E next  
+**Version:** 1.6  
 **Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
@@ -367,7 +367,7 @@ Every ticket is complete only when:
 
 ### Epic D: Rights, licensing, and attribution
 
-**Status:** Implementation in review. OS-021 through OS-027 are included in the Epic D pull request for acceptance.
+**Status:** Complete. Merged to `main` in PR #7 on August 10, 2026; OS-021 through OS-027 are accepted as the rights, licensing, and attribution foundation.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
@@ -380,6 +380,8 @@ Every ticket is complete only when:
 | OS-027 | **Implement rights-safe source downloads.** As a user, I need downloads limited to uses and formats OpenScroll can legally support. | Download eligibility derives from verified rights and source terms; every download includes or links required attribution; restricted derivatives and unsupported formats are blocked with a precise explanation. | OS-025 |
 
 ### Epic E: Knowledge, entity, content, and interest graphs
+
+**Status:** Next. OS-028 through OS-032 are queued as the graph foundation for fully functional Scroll creation, retrieval, and explanation.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
