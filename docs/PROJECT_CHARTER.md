@@ -1,7 +1,7 @@
 # OpenScroll Project Charter
 
-**Status:** Active delivery; Epic B complete, Epic C next  
-**Version:** 1.3  
+**Status:** Active delivery; Epic C implementation in review  
+**Version:** 1.4  
 **Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
@@ -352,7 +352,7 @@ Every ticket is complete only when:
 
 ### Epic C: Universal content, source registry, and connectors
 
-**Status:** Next planned epic. OS-013 through OS-020 will establish canonical content objects, source governance, connector contracts, ingestion orchestration, and the first verified-open source integrations.
+**Status:** Implementation in review. OS-013 through OS-020 are included in the Epic C pull request for acceptance.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
