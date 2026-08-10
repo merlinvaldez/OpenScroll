@@ -1,7 +1,7 @@
 # OpenScroll Project Charter
 
-**Status:** Active delivery; Epic D complete; Epic E next  
-**Version:** 1.6  
+**Status:** Active delivery; Epic E implementation in review  
+**Version:** 1.7  
 **Date:** August 10, 2026  
 **Product:** OpenScroll 1.0  
 **Product type:** Mobile-first open knowledge and media discovery platform
@@ -381,7 +381,7 @@ Every ticket is complete only when:
 
 ### Epic E: Knowledge, entity, content, and interest graphs
 
-**Status:** Next. OS-028 through OS-032 are queued as the graph foundation for fully functional Scroll creation, retrieval, and explanation.
+**Status:** Implementation in review. OS-028 through OS-032 are included in the Epic E pull request for acceptance.
 
 | ID | User story / ticket | Acceptance criteria | Depends on |
 | --- | --- | --- | --- |
