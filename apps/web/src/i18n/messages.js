@@ -11,7 +11,8 @@ export const messages = {
     ready: "Ready", limited: "Limited", protected: "Protected", bestEffort: "Best effort", keep: "Keep local", export: "Export",
     import: "Import", clearHistory: "Clear history", resetData: "Reset data", exported: "Export ready", imported: "Import complete",
     importFailed: "Import failed", persistenceOn: "Persistence requested", persistenceLimited: "Browser decides", cleared: "History cleared",
-    reset: "Local data reset", savedItems: "Saved", collections: "Collections"
+    reset: "Local data reset", savedItems: "Saved", collections: "Collections", provenance: "Provenance", creator: "Creator", license: "License",
+    reason: "Why this?", openBasis: "Verified open source item", sourceHealth: "Source health"
   },
   es: {
     explore: "¿Qué quieres explorar?", exploreNav: "Explorar", search: "Buscar", settings: "Ajustes", navigation: "Navegación principal",
@@ -24,7 +25,8 @@ export const messages = {
     ready: "Listo", limited: "Limitado", protected: "Protegido", bestEffort: "Mejor esfuerzo", keep: "Conservar", export: "Exportar",
     import: "Importar", clearHistory: "Borrar historial", resetData: "Reiniciar datos", exported: "Exportación lista", imported: "Importación completa",
     importFailed: "Importación falló", persistenceOn: "Persistencia solicitada", persistenceLimited: "El navegador decide", cleared: "Historial borrado",
-    reset: "Datos locales reiniciados", savedItems: "Guardados", collections: "Colecciones"
+    reset: "Datos locales reiniciados", savedItems: "Guardados", collections: "Colecciones", provenance: "Procedencia", creator: "Creador", license: "Licencia",
+    reason: "¿Por qué?", openBasis: "Elemento verificado como abierto", sourceHealth: "Estado de la fuente"
   },
   ar: {
     explore: "ماذا تريد أن تستكشف؟", exploreNav: "استكشاف", search: "بحث", settings: "الإعدادات", navigation: "التنقل الرئيسي",
@@ -37,7 +39,8 @@ export const messages = {
     ready: "جاهز", limited: "محدود", protected: "محمي", bestEffort: "أفضل جهد", keep: "حفظ محلي", export: "تصدير",
     import: "استيراد", clearHistory: "مسح السجل", resetData: "إعادة ضبط البيانات", exported: "التصدير جاهز", imported: "اكتمل الاستيراد",
     importFailed: "فشل الاستيراد", persistenceOn: "طُلب الحفظ المستمر", persistenceLimited: "المتصفح يقرر", cleared: "مُسح السجل",
-    reset: "أُعيد ضبط البيانات المحلية", savedItems: "المحفوظات", collections: "المجموعات"
+    reset: "أُعيد ضبط البيانات المحلية", savedItems: "المحفوظات", collections: "المجموعات", provenance: "المصدر", creator: "المنشئ", license: "الرخصة",
+    reason: "لماذا؟", openBasis: "عنصر مفتوح موثّق", sourceHealth: "حالة المصدر"
   }
 };
 export function directionFor(locale) { return locale === "ar" ? "rtl" : "ltr"; }
