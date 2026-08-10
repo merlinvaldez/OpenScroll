@@ -18,7 +18,9 @@ test("OS-013 Universal Content Objects validate every canonical section with fie
   for (const object of canonicalMoroccoSample) {
     const validation = validateUniversalContentObject(object);
     assert.equal(validation.valid, true, validation.errors.join("; "));
-    assert.deepEqual(Object.keys(object.system.provenance).sort(), Object.keys(object.system.provenance).sort());
+    for (const path of ["identity.sourceItemId", "content.title", "creator.names", "media", "rights", "source"]) {
+      assert.ok(object.system.provenance[path], `${path} provenance is required`);
+    }
     assert.ok(object.identity.sourceItemId);
     assert.ok(object.creator.names.length);
     assert.ok(object.rights.eligibility === "eligible");
