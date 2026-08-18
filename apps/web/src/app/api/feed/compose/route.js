@@ -5,7 +5,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const {
-      interest = "Morocco",
+      interest = "Culture",
       topics = [],
       topicWeights = {},
       excludedTopics = [],
@@ -14,10 +14,23 @@ export async function POST(request) {
       pageSize = 25
     } = body;
 
-    // Search live connectors for the interest and specific selected topics
-    const searchQueries = [interest, ...topics.slice(0, 3)];
+    // Concurrently query live connectors for the root curiosity and each selected topic
+    const searchQueries = Array.from(new Set([interest, ...topics])).slice(0, 6);
     const candidateBatches = await Promise.all(
-      searchQueries.map((q) => queryLiveConnectors(q, { limit: 20 }).catch(() => []))
+      searchQueries.map(async (query) => {
+        try {
+          const items = await queryLiveConnectors(query, { limit: 12 });
+          return items.map((item) => ({
+            ...item,
+            knowledge: {
+              ...(item.knowledge || {}),
+              topics: Array.from(new Set([...(item.knowledge?.topics || []), query]))
+            }
+          }));
+        } catch {
+          return [];
+        }
+      })
     );
 
     const candidates = candidateBatches.flat();

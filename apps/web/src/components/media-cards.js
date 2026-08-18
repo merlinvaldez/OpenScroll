@@ -52,6 +52,14 @@ export function ActionRail({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
 export function MetadataRow({ card, messages, locale }) {
   return (
     <div className="meta-row">
+      {card.topic ? (
+        <>
+          <span className="mindmap-topic-badge" title={`Mindmap Topic: ${card.topic}`}>
+            ✦ {card.topic}
+          </span>
+          <span className="meta-separator" aria-hidden="true">•</span>
+        </>
+      ) : null}
       <span className="meta-source" title={card.source}>
         <span className="sr-only">{messages.source}: </span>
         {card.source}

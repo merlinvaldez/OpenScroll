@@ -43,6 +43,7 @@ import {
 import { SavedLibrary } from "./saved-library";
 import { ScrollsManager } from "./scrolls-manager";
 import { EditorialExplore } from "./editorial-explore";
+import { TopicMindmap } from "./topic-mindmap";
 import { Chip, IconButton, Sheet, Toast } from "./primitives";
 import { directionFor, formatItemCount, messages as catalog } from "../i18n/messages";
 import {
@@ -112,10 +113,15 @@ export default function OpenScrollApp() {
   const [selectedTopics, setSelectedTopics] = useState(new Set(DEFAULT_PREFERENCES.topics));
   const [topicWeights, setTopicWeights] = useState({});
   const [topicDimensions, setTopicDimensions] = useState([]);
+  const [mindmapTopology, setMindmapTopology] = useState(null);
   const [resolvedEntity, setResolvedEntity] = useState(null);
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
 
   const [cards, setCards] = useState(INITIAL_CARDS);
+  const [feedCursor, setFeedCursor] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const bottomSentinelRef = useRef(null);
+
   const [activeCard, setActiveCard] = useState(null);
   const [activeModal, setActiveModal] = useState(null); // "branch" | "whyThis" | "whyOpen" | "viewer" | "settings"
   const [viewerMode, setViewerMode] = useState("image");
@@ -219,15 +225,33 @@ export default function OpenScrollApp() {
     setCurrentView("topics");
 
     try {
-      const expanded = await expandTopics(query);
+      // 1. Try live API endpoint first
+      const res = await fetch("/api/topics/expand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query })
+      });
+      let expanded = null;
+      if (res.ok) {
+        const payload = await res.json();
+        expanded = payload.data;
+      }
+      if (!expanded) {
+        expanded = await expandTopics(query);
+      }
       setResolvedEntity(expanded.entity);
       setTopicDimensions(expanded.dimensions);
+      setMindmapTopology(expanded.mindmap || null);
 
-      // Preselect first 3 topics
+      // Preselect top 4 discovered concepts
       const initialSelection = new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name));
       setSelectedTopics(initialSelection);
     } catch {
-      // Fallback cleanly
+      const fallback = await expandTopics(query);
+      setResolvedEntity(fallback.entity);
+      setTopicDimensions(fallback.dimensions);
+      setMindmapTopology(fallback.mindmap || null);
+      setSelectedTopics(new Set(fallback.flatTopics.slice(0, 4).map((t) => t.name)));
     } finally {
       setIsLoadingTopics(false);
     }
@@ -295,6 +319,7 @@ export default function OpenScrollApp() {
 
       const transformedCards = composedItems.map(transformUcoToCard);
       setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
+      setFeedCursor(0);
 
       // 3. Save scroll to local state
       commitState(
@@ -318,11 +343,76 @@ export default function OpenScrollApp() {
       });
       const transformedCards = fallback.items.map(transformUcoToCard);
       setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
+      setFeedCursor(0);
       setCurrentView("feed");
     } finally {
       setIsLoadingTopics(false);
     }
   }
+
+  // Endless Infinite Scroll Loader
+  async function handleLoadMoreCards() {
+    if (isLoadingMore || currentView !== "feed") return;
+    setIsLoadingMore(true);
+
+    try {
+      const nextCursor = feedCursor + 20;
+      const cleanInterest = (interest || "Culture").trim();
+      const topicList = [...selectedTopics];
+
+      const res = await fetch("/api/feed/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interest: cleanInterest,
+          topics: topicList,
+          topicWeights,
+          feedback: localState.feedback,
+          cursor: nextCursor,
+          pageSize: 20
+        })
+      });
+
+      let nextItems = [];
+      if (res.ok) {
+        const payload = await res.json();
+        nextItems = payload.data?.items || [];
+      }
+
+      if (nextItems.length) {
+        const nextCards = nextItems.map(transformUcoToCard);
+        setCards((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const uniqueNew = nextCards.filter((c) => !existingIds.has(c.id));
+          return uniqueNew.length ? [...prev, ...uniqueNew] : prev;
+        });
+        setFeedCursor(nextCursor);
+      }
+    } catch {
+      // Clean fallback
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  // Infinite Scroll Intersection Observer
+  useEffect(() => {
+    if (currentView !== "feed") return;
+    const sentinel = bottomSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isLoadingMore) {
+          handleLoadMoreCards();
+        }
+      },
+      { rootMargin: "600px 0px 600px 0px", threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [currentView, feedCursor, isLoadingMore, interest, selectedTopics]);
 
   function handleToggleSave(card) {
     const wasSaved = localState.saves.some((save) => save.itemId === card.id);
@@ -337,12 +427,16 @@ export default function OpenScrollApp() {
   function handleBranchExplore(concept) {
     setInterest(concept);
     setActiveModal(null);
-    setCurrentView("search");
+    setCurrentView("topics");
+    setIsLoadingTopics(true);
     expandTopics(concept).then((expanded) => {
       setResolvedEntity(expanded.entity);
       setTopicDimensions(expanded.dimensions);
+      setMindmapTopology(expanded.mindmap || null);
       setSelectedTopics(new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name)));
-      setCurrentView("topics");
+      setIsLoadingTopics(false);
+    }).catch(() => {
+      setIsLoadingTopics(false);
     });
   }
 
@@ -362,14 +456,19 @@ export default function OpenScrollApp() {
     setInterest(query);
     setSelectedTopics(new Set(defaultTopics));
     setCurrentView("topics");
+    setIsLoadingTopics(true);
     expandTopics(query).then((expanded) => {
       setResolvedEntity(expanded.entity);
       setTopicDimensions(expanded.dimensions);
+      setMindmapTopology(expanded.mindmap || null);
       if (defaultTopics.length) {
         setSelectedTopics(new Set(defaultTopics));
       } else {
         setSelectedTopics(new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name)));
       }
+      setIsLoadingTopics(false);
+    }).catch(() => {
+      setIsLoadingTopics(false);
     });
   }
 
@@ -465,63 +564,36 @@ export default function OpenScrollApp() {
           </section>
         ) : null}
 
-        {/* VIEW 2: TOPIC SELECTION */}
+        {/* VIEW 2: TOPIC SELECTION (INTERACTIVE MINDMAP) */}
         {currentView === "topics" ? (
           <section className="screen topic-screen" aria-label={messages.choose}>
             <header className="topic-screen-header">
               <IconButton className="back-control" label={messages.back} onClick={() => setCurrentView("search")}>
                 <ArrowLeft className="directional-icon" aria-hidden="true" />
               </IconButton>
-              <div className="topic-entity-summary">
-                <span className="eyebrow">Root Curiosity</span>
-                <h2>{resolvedEntity?.label || interest}</h2>
-                <p dir="auto">{resolvedEntity?.description || "Select directions to shape your multimedia stream."}</p>
-              </div>
             </header>
 
-            <div className="dimensions-container">
-              {topicDimensions.length > 0 ? (
-                topicDimensions.map((dim) => (
-                  <div key={dim.dimensionId} className="dimension-group">
-                    <h3 className="dimension-title">{dim.dimensionLabel}</h3>
-                    <div className="topics-cluster">
-                      {dim.topics.map((t) => {
-                        const isSelected = selectedTopics.has(t.name);
-                        return (
-                          <Chip
-                            key={t.name}
-                            selected={isSelected}
-                            onClick={() => toggleTopicSelection(t.name)}
-                          >
-                            {isSelected ? <Check className="check" aria-hidden="true" /> : null}
-                            <span>{t.name}</span>
-                          </Chip>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="topics-loading">
-                  <span className="skeleton skeleton--title" />
-                  <span className="skeleton skeleton--short" />
-                </div>
-              )}
-            </div>
-
-            <div className="topic-sticky-tray">
-              <span className="tray-count">
-                {selectedTopics.size} {messages.pinnedTopics}
-              </span>
-              <IconButton
-                className="build-control"
-                label={`${messages.build}, ${formatItemCount(locale, selectedTopics.size)}`}
-                onClick={handleBuildScroll}
-                disabled={!selectedTopics.size}
-              >
-                <ArrowRight className="directional-icon" aria-hidden="true" />
-              </IconButton>
-            </div>
+            {isLoadingTopics ? (
+              <div className="topics-loading" style={{ textAlign: "center", padding: "48px 0" }}>
+                <Sparkles className="icon-sm" style={{ margin: "0 auto 12px", color: "var(--os-primary)" }} />
+                <h3 style={{ margin: "0 0 8px", font: "400 24px var(--os-font-display)" }}>Generating Knowledge Mindmap...</h3>
+                <p style={{ margin: 0, color: "var(--os-muted)" }}>Searching Wikipedia and semantic archives for &ldquo;{interest}&rdquo;</p>
+              </div>
+            ) : (
+              <TopicMindmap
+                query={interest}
+                entity={resolvedEntity}
+                dimensions={topicDimensions}
+                mindmap={mindmapTopology}
+                selectedTopics={selectedTopics}
+                onToggleTopic={toggleTopicSelection}
+                onSelectAll={() => setSelectedTopics(new Set(topicDimensions.flatMap((d) => d.topics.map((t) => t.name))))}
+                onClearAll={() => setSelectedTopics(new Set())}
+                onBuildScroll={() => handleBuildScroll(interest, selectedTopics)}
+                isLoading={isLoadingTopics}
+                messages={messages}
+              />
+            )}
           </section>
         ) : null}
 
@@ -565,13 +637,20 @@ export default function OpenScrollApp() {
               );
             })}
 
-            <SessionBreathingCard
-              exploredCount={cards.length}
-              sourceCount={5}
-              onContinue={() => setToast("Loading further open discoveries...")}
-              onPause={() => setCurrentView("scrolls")}
-              messages={messages}
-            />
+            {/* ENDLESS INFINITE SCROLL STREAM (NO HUMANE STOP) */}
+            <div ref={bottomSentinelRef} className="infinite-stream-sentinel" aria-live="polite">
+              {isLoadingMore ? (
+                <div className="infinite-stream-loader">
+                  <Sparkles className="icon-sm spin" aria-hidden="true" />
+                  <span>Streaming further open discoveries...</span>
+                </div>
+              ) : (
+                <div className="infinite-stream-loader infinite-stream-loader--subtle">
+                  <span className="stream-dot" aria-hidden="true" />
+                  <span>Infinite Open Stream • Scroll for as long as you like</span>
+                </div>
+              )}
+            </div>
           </section>
         ) : null}
 
