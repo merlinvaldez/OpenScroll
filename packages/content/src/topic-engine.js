@@ -576,7 +576,101 @@ export function buildMindmapTopology(rootQuery, entity, dimensions) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. ENTITY RESOLUTION & COMPREHENSIVE MINDMAP EXPORT
+// 4. OPENAI KNOWLEDGE GRAPH GENERATOR (Optional Cloud AI Provider)
+// ---------------------------------------------------------------------------
+export async function generateMindmapWithOpenAI(query, apiKey, model = process.env.OPENAI_MODEL || "gpt-4o") {
+  if (!apiKey || typeof fetch !== "function") return null;
+
+  const prompt = `You are a world-class curator of human knowledge, culture, arts, and science.
+Analyze the concept "${query}" and generate an interconnected semantic knowledge graph across 5 distinct dimensions.
+
+Return a JSON object with this exact structure:
+{
+  "entity": {
+    "label": "Canonical Name of Concept",
+    "description": "Engaging 1-2 sentence overview of the concept and its global significance.",
+    "aliases": ["Alternative Name 1", "Alternative Name 2"]
+  },
+  "dimensions": [
+    {
+      "dimensionId": "arts-music",
+      "dimensionLabel": "Styles, Movements & Creative Arts",
+      "icon": "sparkles",
+      "color": "#ec4899",
+      "topics": [
+        { "name": "Specific Movement/Style", "description": "1 sentence explanation of this concept.", "weight": 1.0, "icon": "palette" }
+      ]
+    },
+    {
+      "dimensionId": "history-roots",
+      "dimensionLabel": "Key Figures, Masters & Heritage",
+      "icon": "history",
+      "color": "#f59e0b",
+      "topics": [
+        { "name": "Specific Key Person or Epoch", "description": "1 sentence explanation.", "weight": 1.0, "icon": "user" }
+      ]
+    },
+    {
+      "dimensionId": "language-thought",
+      "dimensionLabel": "Foundations, Theory & Core Mechanics",
+      "icon": "book-open",
+      "color": "#6366f1",
+      "topics": [
+        { "name": "Specific Fundamental Principle", "description": "1 sentence explanation.", "weight": 1.0, "icon": "brain" }
+      ]
+    },
+    {
+      "dimensionId": "architecture-places",
+      "dimensionLabel": "Geographic Hubs & Cultural Sites",
+      "icon": "compass",
+      "color": "#10b981",
+      "topics": [
+        { "name": "Specific Historic Hub/Site", "description": "1 sentence explanation.", "weight": 1.0, "icon": "map-pin" }
+      ]
+    },
+    {
+      "dimensionId": "science-data",
+      "dimensionLabel": "Masterpieces, Archives & Empirical Data",
+      "icon": "archive",
+      "color": "#06b6d4",
+      "topics": [
+        { "name": "Specific Masterpiece/Archive", "description": "1 sentence explanation.", "weight": 1.0, "icon": "archive" }
+      ]
+    }
+  ]
+}
+Each dimension MUST have 3 to 5 real, accurate, and deeply relevant conceptual nodes. Avoid generic placeholders. Return valid JSON only.`;
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: "You are a specialized semantic knowledge graph engine. Output JSON only." },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3
+      })
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const raw = json.choices?.[0]?.message?.content;
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. ENTITY RESOLUTION & COMPREHENSIVE MINDMAP EXPORT
 // ---------------------------------------------------------------------------
 export async function resolveEntity(query, options = {}) {
   const clean = cleanString(query, 120).toLowerCase();
@@ -619,6 +713,36 @@ export async function resolveEntity(query, options = {}) {
 export async function expandTopics(query, options = {}) {
   const clean = cleanString(query, 120).toLowerCase();
   const key = CURATED_ALIASES[clean] || clean;
+
+  // 0. Check for OpenAI API Key in options or process.env
+  const openaiApiKey = options.apiKey || (typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : null);
+  const openaiModel = options.model || (typeof process !== "undefined" ? process.env?.OPENAI_MODEL : null) || "gpt-4o";
+
+  if (openaiApiKey && options.useOpenAI !== false) {
+    const aiData = await generateMindmapWithOpenAI(query, openaiApiKey, openaiModel);
+    if (aiData && aiData.dimensions?.length) {
+      const entity = {
+        id: `AI-${slug(aiData.entity?.label || query)}`,
+        label: aiData.entity?.label || query,
+        description: aiData.entity?.description || `Knowledge graph relating to ${query}`,
+        aliases: aiData.entity?.aliases || [query]
+      };
+      const dimensions = aiData.dimensions;
+      const flatTopics = dimensions.flatMap((d) =>
+        (d.topics || []).map((t) => ({ ...t, dimensionId: d.dimensionId, dimensionLabel: d.dimensionLabel, color: d.color }))
+      );
+      const mindmap = buildMindmapTopology(query, entity, dimensions);
+      return {
+        query,
+        entity,
+        dimensions,
+        mindmap,
+        flatTopics,
+        count: flatTopics.length,
+        source: `OpenAI (${openaiModel})`
+      };
+    }
+  }
 
   const resolvedEntity = await resolveEntity(query, options);
 
