@@ -245,39 +245,83 @@ export default function OpenScrollApp() {
     });
   }
 
-  function handleBuildScroll() {
-    if (!selectedTopics.size) {
+  async function handleBuildScroll(overrideInterest, overrideTopics) {
+    const isStringOverride = typeof overrideInterest === "string";
+    const cleanInterest = (isStringOverride ? overrideInterest : (interest || "Culture")).trim();
+
+    const isExplicitTopicArray = Array.isArray(overrideTopics) || overrideTopics instanceof Set;
+    const topicSet = isExplicitTopicArray ? new Set(overrideTopics) : selectedTopics;
+
+    if (!topicSet.size) {
       setToast(messages.empty);
       return;
     }
 
-    const cleanInterest = interest.trim() || "Morocco";
-    const topicList = [...selectedTopics];
+    const topicList = [...topicSet];
+    setIsLoadingTopics(true);
 
-    // Filter and compose diversity feed
-    const candidateUCOs = canonicalMoroccoSample;
-    const composed = composeDiversityFeed(candidateUCOs, {
-      interestGraph: {
-        interest: cleanInterest,
-        topics: topicList,
-        topicWeights
-      },
-      feedback: localState.feedback
-    });
+    try {
+      // 1. Fetch live composed diversity feed from backend API
+      const res = await fetch("/api/feed/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interest: cleanInterest,
+          topics: topicList,
+          topicWeights,
+          feedback: localState.feedback,
+          pageSize: 25
+        })
+      });
 
-    const transformedCards = composed.items.map(transformUcoToCard);
-    setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
+      let composedItems = [];
+      if (res.ok) {
+        const payload = await res.json();
+        composedItems = payload.data?.items || [];
+      }
 
-    // Save scroll to local state
-    commitState(
-      recordScrollCreation(localState, {
-        interest: cleanInterest,
-        topics: topicList
-      }),
-      messages.saved
-    );
+      // 2. Fallback to client-side composer if offline / empty
+      if (!composedItems.length) {
+        const fallback = composeDiversityFeed(canonicalMoroccoSample, {
+          interestGraph: {
+            interest: cleanInterest,
+            topics: topicList,
+            topicWeights
+          },
+          feedback: localState.feedback
+        });
+        composedItems = fallback.items;
+      }
 
-    setCurrentView("feed");
+      const transformedCards = composedItems.map(transformUcoToCard);
+      setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
+
+      // 3. Save scroll to local state
+      commitState(
+        recordScrollCreation(localState, {
+          interest: cleanInterest,
+          topics: topicList
+        }),
+        messages.saved
+      );
+
+      setCurrentView("feed");
+    } catch {
+      // Offline fallback
+      const fallback = composeDiversityFeed(canonicalMoroccoSample, {
+        interestGraph: {
+          interest: cleanInterest,
+          topics: topicList,
+          topicWeights
+        },
+        feedback: localState.feedback
+      });
+      const transformedCards = fallback.items.map(transformUcoToCard);
+      setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
+      setCurrentView("feed");
+    } finally {
+      setIsLoadingTopics(false);
+    }
   }
 
   function handleToggleSave(card) {
@@ -294,7 +338,12 @@ export default function OpenScrollApp() {
     setInterest(concept);
     setActiveModal(null);
     setCurrentView("search");
-    handleSearchSubmit();
+    expandTopics(concept).then((expanded) => {
+      setResolvedEntity(expanded.entity);
+      setTopicDimensions(expanded.dimensions);
+      setSelectedTopics(new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name)));
+      setCurrentView("topics");
+    });
   }
 
   function handleAddToScroll(concept) {
@@ -306,7 +355,7 @@ export default function OpenScrollApp() {
   function handleSelectScroll(scroll) {
     setInterest(scroll.interest);
     setSelectedTopics(new Set(scroll.topics));
-    handleBuildScroll();
+    handleBuildScroll(scroll.interest, scroll.topics);
   }
 
   function handleStartExploreJourney(query, defaultTopics = []) {
