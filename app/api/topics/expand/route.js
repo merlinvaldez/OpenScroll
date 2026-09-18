@@ -10,7 +10,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
-    const expanded = await expandTopics(query.trim(), { language, useLiveApi: true });
+    const expanded = await expandTopics(query.trim(), { language });
 
     return NextResponse.json({
       version: "1",
@@ -20,7 +20,7 @@ export async function POST(request) {
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to expand topics", message: error.message },
-      { status: 500 }
+      { status: Number.isInteger(error?.status) ? error.status : 500 }
     );
   }
 }

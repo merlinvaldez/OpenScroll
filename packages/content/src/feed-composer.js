@@ -1,6 +1,23 @@
 import { openLicenseGate } from "./rights.js";
 import { cleanString, deepFreeze, unique } from "./utils.js";
 
+function seededRandom(seed) {
+  let state = Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : Math.floor(Math.random() * 0x100000000);
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function shuffle(values, random) {
+  const shuffled = [...values];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 export function deduplicateCandidates(candidates) {
   const clusters = new Map();
 
@@ -72,7 +89,8 @@ export function composeDiversityFeed(candidates, options = {}) {
     interestGraph = {},
     feedback = [],
     pageSize = 25,
-    cursor = 0
+    cursor = 0,
+    seed
   } = options;
 
   // 1. Pass through Open License Gate (Fail closed)
@@ -93,14 +111,13 @@ export function composeDiversityFeed(candidates, options = {}) {
   // 2. Deduplicate
   const deduplicated = deduplicateCandidates(eligible);
 
-  // 3. Score and Filter
+  // 3. Score and Filter. Scores decide eligibility, not display order.
   const scored = deduplicated
     .map((item) => ({ item, score: scoreCandidate(item, interestGraph, feedback) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
+    .filter((entry) => entry.score > 0);
 
-  // 4. Apply Diversity Constraints (Max 2 consecutive of same media kind or same source)
-  const pool = scored.map((s) => s.item);
+  // 4. Shuffle for open exploration, then keep the existing diversity guardrails.
+  const pool = shuffle(scored.map((entry) => entry.item), seededRandom(seed));
   const composed = [];
   const remaining = [...pool];
 

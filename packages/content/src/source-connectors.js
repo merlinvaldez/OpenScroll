@@ -276,19 +276,23 @@ export async function searchMetMuseumLive(query, limit = 6) {
 // 4. COMBINED LIVE CONNECTOR QUERY RUNNER
 // ---------------------------------------------------------------------------
 export async function queryLiveConnectors(query, options = {}) {
-  const { limit = 30 } = options;
+  const { sources = ["wikipedia", "wikimedia-commons", "met"], allowFixtureFallback = true } = options;
+  const explicitLimit = Number.isInteger(options.limit) ? Math.max(1, options.limit) : null;
+  const requests = [];
 
-  // Run in parallel with error isolation
-  const [wikiItems, commonsItems, metItems] = await Promise.all([
-    searchWikipediaLive(query, 6).catch(() => []),
-    searchCommonsLive(query, 12).catch(() => []),
-    searchMetMuseumLive(query, 6).catch(() => [])
-  ]);
+  if (sources.includes("wikipedia")) {
+    requests.push(searchWikipediaLive(query, explicitLimit ?? 6).catch(() => []));
+  }
+  if (sources.includes("wikimedia-commons")) {
+    requests.push(searchCommonsLive(query, explicitLimit ?? 12).catch(() => []));
+  }
+  if (sources.includes("met")) {
+    requests.push(searchMetMuseumLive(query, explicitLimit ?? 6).catch(() => []));
+  }
 
-  const liveCandidates = [...wikiItems, ...commonsItems, ...metItems];
+  const liveCandidates = (await Promise.all(requests)).flat();
 
-  // If live query succeeded and returned results, normalize and return them
-  if (liveCandidates.length >= 3) {
+  if (liveCandidates.length > 0) {
     return liveCandidates.map((raw) => {
       try {
         return createUniversalContentObject(raw);
@@ -298,7 +302,9 @@ export async function queryLiveConnectors(query, options = {}) {
     });
   }
 
-  // Fallback to local fixtures if offline / rate-limited
+  if (!allowFixtureFallback) return [];
+
+  // Preserve the fixture-backed behavior for callers that explicitly allow it.
   const tokens = cleanString(query, 80).toLowerCase().split(/\s+/);
   const fallback = EPIC_C_RAW_ITEMS.filter((item) => {
     const text = `${item.title} ${item.description} ${(item.topics || []).join(" ")}`.toLowerCase();

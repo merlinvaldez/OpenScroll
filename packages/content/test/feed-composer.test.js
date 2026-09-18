@@ -37,3 +37,17 @@ test("deduplication selects canonical representation from cluster", () => {
   assert.equal(deduplicated.length, 1);
   assert.equal(deduplicated[0].id, "item-2");
 });
+
+test("feed order is randomized but stable for a scroll seed", () => {
+  const options = {
+    interestGraph: { interest: "Morocco", topics: ["Music", "Architecture", "History"] },
+    pageSize: 10,
+    seed: 12345
+  };
+  const first = composeDiversityFeed(canonicalMoroccoSample, options).items.map((item) => item.id);
+  const repeated = composeDiversityFeed(canonicalMoroccoSample, options).items.map((item) => item.id);
+  const differentSeed = composeDiversityFeed(canonicalMoroccoSample, { ...options, seed: 98765 }).items.map((item) => item.id);
+
+  assert.deepEqual(repeated, first, "the same scroll seed must preserve pagination order");
+  assert.notDeepEqual(differentSeed, first, "different scroll seeds must produce a different exploration order");
+});

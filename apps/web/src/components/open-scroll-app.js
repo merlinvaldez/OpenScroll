@@ -27,10 +27,7 @@ import {
   X
 } from "lucide-react";
 import {
-  canonicalMoroccoSample,
-  composeDiversityFeed,
-  expandTopics,
-  resolveEntity
+  canonicalMoroccoSample
 } from "@openscroll/content";
 import AppShell from "./app-shell";
 import { UniversalCard, SessionBreathingCard } from "./media-cards";
@@ -106,19 +103,25 @@ function formatBytes(value) {
   return `${Math.round(value / 1024 / 1024)} MB`;
 }
 
+function createFeedSeed() {
+  return Math.floor(Math.random() * 0x100000000);
+}
+
 export default function OpenScrollApp() {
   // Navigation: "explore" | "search" | "topics" | "feed" | "scrolls" | "saved" | "settings"
   const [currentView, setCurrentView] = useState("search");
   const [interest, setInterest] = useState("");
   const [selectedTopics, setSelectedTopics] = useState(new Set(DEFAULT_PREFERENCES.topics));
   const [topicWeights, setTopicWeights] = useState({});
-  const [topicDimensions, setTopicDimensions] = useState([]);
+  const [topicCategories, setTopicCategories] = useState([]);
   const [mindmapTopology, setMindmapTopology] = useState(null);
   const [resolvedEntity, setResolvedEntity] = useState(null);
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
+  const [topicError, setTopicError] = useState("");
 
   const [cards, setCards] = useState(INITIAL_CARDS);
   const [feedCursor, setFeedCursor] = useState(0);
+  const [feedSeed, setFeedSeed] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const bottomSentinelRef = useRef(null);
 
@@ -149,6 +152,38 @@ export default function OpenScrollApp() {
 
   async function refreshStorageEstimate() {
     setStorageEstimate(await getDeviceStorageStatus());
+  }
+
+  async function requestTopicExpansion(query) {
+    const response = await fetch("/api/topics/expand", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // The route must return an OpenAI error payload. Do not synthesize content here.
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.message || payload?.error || "OpenAI topic generation failed.");
+    }
+
+    if (!payload?.data) {
+      throw new Error("OpenAI topic generation returned no data.");
+    }
+
+    return payload.data;
+  }
+
+  function applyExpandedTopics(expanded, defaultTopics = []) {
+    setResolvedEntity(expanded.entity);
+    setTopicCategories(expanded.categories);
+    setMindmapTopology(expanded.mindmap || null);
+    setSelectedTopics(new Set(defaultTopics.length ? defaultTopics : expanded.flatTopics.slice(0, 4).map((topic) => topic.name)));
   }
 
   function commitState(nextState, message, { syncJourney = false } = {}) {
@@ -223,35 +258,15 @@ export default function OpenScrollApp() {
 
     setIsLoadingTopics(true);
     setCurrentView("topics");
+    setTopicError("");
+    setResolvedEntity(null);
+    setTopicCategories([]);
+    setMindmapTopology(null);
 
     try {
-      // 1. Try live API endpoint first
-      const res = await fetch("/api/topics/expand", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query })
-      });
-      let expanded = null;
-      if (res.ok) {
-        const payload = await res.json();
-        expanded = payload.data;
-      }
-      if (!expanded) {
-        expanded = await expandTopics(query);
-      }
-      setResolvedEntity(expanded.entity);
-      setTopicDimensions(expanded.dimensions);
-      setMindmapTopology(expanded.mindmap || null);
-
-      // Preselect top 4 discovered concepts
-      const initialSelection = new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name));
-      setSelectedTopics(initialSelection);
-    } catch {
-      const fallback = await expandTopics(query);
-      setResolvedEntity(fallback.entity);
-      setTopicDimensions(fallback.dimensions);
-      setMindmapTopology(fallback.mindmap || null);
-      setSelectedTopics(new Set(fallback.flatTopics.slice(0, 4).map((t) => t.name)));
+      applyExpandedTopics(await requestTopicExpansion(query));
+    } catch (error) {
+      setTopicError(error.message);
     } finally {
       setIsLoadingTopics(false);
     }
@@ -282,10 +297,11 @@ export default function OpenScrollApp() {
     }
 
     const topicList = [...topicSet];
+    const nextSeed = createFeedSeed();
     setIsLoadingTopics(true);
+    setFeedSeed(nextSeed);
 
     try {
-      // 1. Fetch live composed diversity feed from backend API
       const res = await fetch("/api/feed/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -294,32 +310,24 @@ export default function OpenScrollApp() {
           topics: topicList,
           topicWeights,
           feedback: localState.feedback,
-          pageSize: 25
+          pageSize: 25,
+          seed: nextSeed
         })
       });
 
-      let composedItems = [];
-      if (res.ok) {
-        const payload = await res.json();
-        composedItems = payload.data?.items || [];
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || payload?.error || "The Wikimedia Commons feed could not be built.");
       }
 
-      // 2. Fallback to client-side composer if offline / empty
+      const composedItems = payload?.data?.items || [];
       if (!composedItems.length) {
-        const fallback = composeDiversityFeed(canonicalMoroccoSample, {
-          interestGraph: {
-            interest: cleanInterest,
-            topics: topicList,
-            topicWeights
-          },
-          feedback: localState.feedback
-        });
-        composedItems = fallback.items;
+        throw new Error("Wikimedia Commons returned no eligible results for these topics.");
       }
 
       const transformedCards = composedItems.map(transformUcoToCard);
-      setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
-      setFeedCursor(0);
+      setCards(transformedCards);
+      setFeedCursor(payload.data.pagination?.nextCursor ?? null);
 
       // 3. Save scroll to local state
       commitState(
@@ -331,20 +339,8 @@ export default function OpenScrollApp() {
       );
 
       setCurrentView("feed");
-    } catch {
-      // Offline fallback
-      const fallback = composeDiversityFeed(canonicalMoroccoSample, {
-        interestGraph: {
-          interest: cleanInterest,
-          topics: topicList,
-          topicWeights
-        },
-        feedback: localState.feedback
-      });
-      const transformedCards = fallback.items.map(transformUcoToCard);
-      setCards(transformedCards.length ? transformedCards : INITIAL_CARDS);
-      setFeedCursor(0);
-      setCurrentView("feed");
+    } catch (error) {
+      setToast(error.message);
     } finally {
       setIsLoadingTopics(false);
     }
@@ -352,11 +348,11 @@ export default function OpenScrollApp() {
 
   // Endless Infinite Scroll Loader
   async function handleLoadMoreCards() {
-    if (isLoadingMore || currentView !== "feed") return;
+    if (isLoadingMore || currentView !== "feed" || feedCursor === null) return;
     setIsLoadingMore(true);
 
     try {
-      const nextCursor = feedCursor + 20;
+      const nextCursor = feedCursor;
       const cleanInterest = (interest || "Culture").trim();
       const topicList = [...selectedTopics];
 
@@ -369,15 +365,17 @@ export default function OpenScrollApp() {
           topicWeights,
           feedback: localState.feedback,
           cursor: nextCursor,
-          pageSize: 20
+          pageSize: 20,
+          seed: feedSeed
         })
       });
 
-      let nextItems = [];
-      if (res.ok) {
-        const payload = await res.json();
-        nextItems = payload.data?.items || [];
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || payload?.error || "The Wikimedia Commons feed could not be extended.");
       }
+
+      const nextItems = payload?.data?.items || [];
 
       if (nextItems.length) {
         const nextCards = nextItems.map(transformUcoToCard);
@@ -386,10 +384,12 @@ export default function OpenScrollApp() {
           const uniqueNew = nextCards.filter((c) => !existingIds.has(c.id));
           return uniqueNew.length ? [...prev, ...uniqueNew] : prev;
         });
-        setFeedCursor(nextCursor);
+        setFeedCursor(payload.data.pagination?.nextCursor ?? null);
+      } else {
+        setFeedCursor(null);
       }
-    } catch {
-      // Clean fallback
+    } catch (error) {
+      setToast(error.message);
     } finally {
       setIsLoadingMore(false);
     }
@@ -412,7 +412,7 @@ export default function OpenScrollApp() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [currentView, feedCursor, isLoadingMore, interest, selectedTopics]);
+  }, [currentView, feedCursor, feedSeed, isLoadingMore, interest, selectedTopics]);
 
   function handleToggleSave(card) {
     const wasSaved = localState.saves.some((save) => save.itemId === card.id);
@@ -429,13 +429,15 @@ export default function OpenScrollApp() {
     setActiveModal(null);
     setCurrentView("topics");
     setIsLoadingTopics(true);
-    expandTopics(concept).then((expanded) => {
-      setResolvedEntity(expanded.entity);
-      setTopicDimensions(expanded.dimensions);
-      setMindmapTopology(expanded.mindmap || null);
-      setSelectedTopics(new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name)));
-      setIsLoadingTopics(false);
-    }).catch(() => {
+    setTopicError("");
+    setResolvedEntity(null);
+    setTopicCategories([]);
+    setMindmapTopology(null);
+    requestTopicExpansion(concept).then((expanded) => {
+      applyExpandedTopics(expanded);
+    }).catch((error) => {
+      setTopicError(error.message);
+    }).finally(() => {
       setIsLoadingTopics(false);
     });
   }
@@ -457,17 +459,15 @@ export default function OpenScrollApp() {
     setSelectedTopics(new Set(defaultTopics));
     setCurrentView("topics");
     setIsLoadingTopics(true);
-    expandTopics(query).then((expanded) => {
-      setResolvedEntity(expanded.entity);
-      setTopicDimensions(expanded.dimensions);
-      setMindmapTopology(expanded.mindmap || null);
-      if (defaultTopics.length) {
-        setSelectedTopics(new Set(defaultTopics));
-      } else {
-        setSelectedTopics(new Set(expanded.flatTopics.slice(0, 4).map((t) => t.name)));
-      }
-      setIsLoadingTopics(false);
-    }).catch(() => {
+    setTopicError("");
+    setResolvedEntity(null);
+    setTopicCategories([]);
+    setMindmapTopology(null);
+    requestTopicExpansion(query).then((expanded) => {
+      applyExpandedTopics(expanded, defaultTopics);
+    }).catch((error) => {
+      setTopicError(error.message);
+    }).finally(() => {
       setIsLoadingTopics(false);
     });
   }
@@ -577,17 +577,22 @@ export default function OpenScrollApp() {
               <div className="topics-loading" style={{ textAlign: "center", padding: "48px 0" }}>
                 <Sparkles className="icon-sm" style={{ margin: "0 auto 12px", color: "var(--os-primary)" }} />
                 <h3 style={{ margin: "0 0 8px", font: "400 24px var(--os-font-display)" }}>Generating Knowledge Mindmap...</h3>
-                <p style={{ margin: 0, color: "var(--os-muted)" }}>Searching Wikipedia and semantic archives for &ldquo;{interest}&rdquo;</p>
+                <p style={{ margin: 0, color: "var(--os-muted)" }}>Asking OpenAI to map &ldquo;{interest}&rdquo;</p>
+              </div>
+            ) : topicError ? (
+              <div className="topics-error" role="alert" style={{ textAlign: "center", padding: "48px 0" }}>
+                <h3 style={{ margin: "0 0 8px", font: "400 24px var(--os-font-display)" }}>OpenAI could not generate this mindmap</h3>
+                <p style={{ margin: 0, color: "var(--os-muted)" }}>{topicError}</p>
               </div>
             ) : (
               <TopicMindmap
                 query={interest}
                 entity={resolvedEntity}
-                dimensions={topicDimensions}
+                categories={topicCategories}
                 mindmap={mindmapTopology}
                 selectedTopics={selectedTopics}
                 onToggleTopic={toggleTopicSelection}
-                onSelectAll={() => setSelectedTopics(new Set(topicDimensions.flatMap((d) => d.topics.map((t) => t.name))))}
+                onSelectAll={() => setSelectedTopics(new Set(topicCategories.flatMap((category) => category.topics.map((topic) => topic.name))))}
                 onClearAll={() => setSelectedTopics(new Set())}
                 onBuildScroll={() => handleBuildScroll(interest, selectedTopics)}
                 isLoading={isLoadingTopics}

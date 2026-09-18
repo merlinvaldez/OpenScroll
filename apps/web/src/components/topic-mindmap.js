@@ -77,7 +77,7 @@ const ICON_MAP = {
 export function TopicMindmap({
   query,
   entity,
-  dimensions = [],
+  categories = [],
   mindmap = null,
   selectedTopics = new Set(),
   onToggleTopic,
@@ -92,10 +92,10 @@ export function TopicMindmap({
   const [hoveredNode, setHoveredNode] = useState(null);
   const infoDialogId = useId();
 
-  const flatTopics = dimensions.flatMap((d) => d.topics || []);
+  const flatTopics = categories.flatMap((category) => category.topics || []);
 
-  function handleBranchToggle(dimension) {
-    const branchTopicNames = dimension.topics.map((t) => t.name);
+  function handleBranchToggle(category) {
+    const branchTopicNames = category.topics.map((topic) => topic.name);
     const allSelected = branchTopicNames.every((name) => selectedTopics.has(name));
 
     branchTopicNames.forEach((name) => {
@@ -150,7 +150,7 @@ export function TopicMindmap({
             onClick={() => setViewMode("clusters")}
           >
             <Grid className="icon-sm" aria-hidden="true" />
-            <span>Dimension Clusters</span>
+            <span>Category Clusters</span>
           </button>
         </div>
       </header>
@@ -169,30 +169,30 @@ export function TopicMindmap({
               </div>
             </div>
 
-            {/* RADIAL DIMENSION CLUSTERS */}
+            {/* RADIAL CATEGORY CLUSTERS */}
             <div className="mindmap-branches-grid">
-              {dimensions.map((dim) => {
-                const DimIcon = ICON_MAP[dim.icon] || Compass;
-                const branchSelectedCount = dim.topics.filter((t) => selectedTopics.has(t.name)).length;
-                const isAllBranchSelected = branchSelectedCount === dim.topics.length && dim.topics.length > 0;
+              {categories.map((category) => {
+                const DimIcon = ICON_MAP[category.icon] || Compass;
+                const branchSelectedCount = category.topics.filter((topic) => selectedTopics.has(topic.name)).length;
+                const isAllBranchSelected = branchSelectedCount === category.topics.length && category.topics.length > 0;
 
                 return (
                   <div
-                    key={dim.dimensionId}
+                    key={category.categoryId}
                     className="mindmap-branch-card"
-                    style={{ "--branch-color": dim.color || "var(--os-primary)" }}
+                    style={{ "--branch-color": category.color || "var(--os-primary)" }}
                   >
                     <div className="branch-card-header">
                       <div className="branch-title-wrap">
                         <span className="branch-icon-badge">
                           <DimIcon className="icon-sm" aria-hidden="true" />
                         </span>
-                        <h4>{dim.dimensionLabel}</h4>
+                        <h4>{category.categoryLabel}</h4>
                       </div>
                       <button
                         type="button"
                         className="branch-toggle-btn"
-                        onClick={() => handleBranchToggle(dim)}
+                         onClick={() => handleBranchToggle(category)}
                         title={isAllBranchSelected ? "Deselect Branch" : "Select Entire Branch"}
                       >
                         {isAllBranchSelected ? "Deselect All" : "Select Branch"}
@@ -200,7 +200,7 @@ export function TopicMindmap({
                     </div>
 
                     <div className="branch-nodes-cluster">
-                      {dim.topics.map((topic) => {
+                      {category.topics.map((topic) => {
                         const TopicIcon = ICON_MAP[topic.icon] || DimIcon;
                         const isSelected = selectedTopics.has(topic.name);
                         const isHovered = hoveredNode === topic.name;
@@ -251,41 +251,41 @@ export function TopicMindmap({
           </div>
         </div>
       ) : (
-        /* 3. STRUCTURED CLUSTERS LIST VIEW */
-        <div className="mindmap-clusters-list">
-          {dimensions.map((dim) => {
-            const DimIcon = ICON_MAP[dim.icon] || Compass;
+        /* 3. STRUCTURED CATEGORY LIST VIEW */
+         <div className="mindmap-clusters-list">
+          {categories.map((category) => {
+            const DimIcon = ICON_MAP[category.icon] || Compass;
             return (
-              <div key={dim.dimensionId} className="cluster-group">
+              <div key={category.categoryId} className="cluster-group">
                 <div className="cluster-group-header">
                   <div className="cluster-title-wrap">
                     <DimIcon className="icon-sm" aria-hidden="true" />
-                    <h3>{dim.dimensionLabel}</h3>
+                    <h3>{category.categoryLabel}</h3>
                   </div>
                   <button
                     type="button"
                     className="branch-toggle-btn"
-                    onClick={() => handleBranchToggle(dim)}
+                     onClick={() => handleBranchToggle(category)}
                   >
-                    Toggle Dimension
+                    Toggle Category
                   </button>
                 </div>
                 <div className="cluster-chips-row">
-                  {dim.topics.map((t) => {
-                    const isSelected = selectedTopics.has(t.name);
-                    const TopicIcon = ICON_MAP[t.icon] || DimIcon;
+                  {category.topics.map((topic) => {
+                    const isSelected = selectedTopics.has(topic.name);
+                    const TopicIcon = ICON_MAP[topic.icon] || DimIcon;
                     return (
                       <Chip
-                        key={t.name}
+                        key={topic.name}
                         selected={isSelected}
-                        onClick={() => onToggleTopic(t.name)}
+                        onClick={() => onToggleTopic(topic.name)}
                       >
                         {isSelected ? (
                           <Check className="check" aria-hidden="true" />
                         ) : (
                           <TopicIcon className="icon-xs" aria-hidden="true" />
                         )}
-                        <span>{t.name}</span>
+                        <span>{topic.name}</span>
                       </Chip>
                     );
                   })}
@@ -307,7 +307,7 @@ export function TopicMindmap({
           >
             <header className="node-detail-header">
               <div className="node-detail-title-wrap">
-                <span className="dimension-badge">{focusedNode.dimensionLabel || "Knowledge Branch"}</span>
+                <span className="dimension-badge">{focusedNode.categoryLabel || "Knowledge Category"}</span>
                 <h3 id={infoDialogId}>{focusedNode.name}</h3>
               </div>
               <IconButton label="Close" onClick={() => setFocusedNode(null)}>

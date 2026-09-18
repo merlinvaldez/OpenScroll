@@ -11,25 +11,30 @@ export async function POST(request) {
       excludedTopics = [],
       feedback = [],
       cursor = 0,
-      pageSize = 25
+      pageSize = 25,
+      seed
     } = body;
 
-    // Concurrently query live connectors for the root curiosity and each selected topic
-    const searchQueries = Array.from(new Set([interest, ...topics])).slice(0, 6);
+    const searchQueries = Array.from(new Set((Array.isArray(topics) ? topics : []).filter((topic) => typeof topic === "string" && topic.trim())));
+    if (!searchQueries.length) {
+      return NextResponse.json({ error: "At least one topic is required" }, { status: 400 });
+    }
+
+    // Fetch exactly up to five Wikimedia Commons results for every selected topic.
     const candidateBatches = await Promise.all(
       searchQueries.map(async (query) => {
-        try {
-          const items = await queryLiveConnectors(query, { limit: 12 });
-          return items.map((item) => ({
-            ...item,
-            knowledge: {
-              ...(item.knowledge || {}),
-              topics: Array.from(new Set([...(item.knowledge?.topics || []), query]))
-            }
-          }));
-        } catch {
-          return [];
-        }
+        const items = await queryLiveConnectors(query, {
+          limit: 5,
+          sources: ["wikimedia-commons"],
+          allowFixtureFallback: false
+        });
+        return items.map((item) => ({
+          ...item,
+          knowledge: {
+            ...(item.knowledge || {}),
+            topics: Array.from(new Set([...(item.knowledge?.topics || []), query]))
+          }
+        }));
       })
     );
 
@@ -44,7 +49,8 @@ export async function POST(request) {
       },
       feedback,
       cursor,
-      pageSize
+      pageSize,
+      seed
     });
 
     return NextResponse.json({
