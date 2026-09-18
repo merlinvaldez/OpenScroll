@@ -122,6 +122,8 @@ export default function OpenScrollApp() {
   const [cards, setCards] = useState(INITIAL_CARDS);
   const [feedCursor, setFeedCursor] = useState(0);
   const [feedSeed, setFeedSeed] = useState(null);
+  const [feedSourceOffsets, setFeedSourceOffsets] = useState({});
+  const [feedExhausted, setFeedExhausted] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const bottomSentinelRef = useRef(null);
 
@@ -300,6 +302,9 @@ export default function OpenScrollApp() {
     const nextSeed = createFeedSeed();
     setIsLoadingTopics(true);
     setFeedSeed(nextSeed);
+    setFeedCursor(null);
+    setFeedSourceOffsets({});
+    setFeedExhausted(false);
 
     try {
       const res = await fetch("/api/feed/compose", {
@@ -310,7 +315,7 @@ export default function OpenScrollApp() {
           topics: topicList,
           topicWeights,
           feedback: localState.feedback,
-          pageSize: 25,
+          pageSize: Math.max(25, topicList.length * 5),
           seed: nextSeed
         })
       });
@@ -328,6 +333,8 @@ export default function OpenScrollApp() {
       const transformedCards = composedItems.map(transformUcoToCard);
       setCards(transformedCards);
       setFeedCursor(payload.data.pagination?.nextCursor ?? null);
+      setFeedSourceOffsets(payload.data.sourceOffsets || {});
+      setFeedExhausted(payload.data.sourceHasMore === false);
 
       // 3. Save scroll to local state
       commitState(
@@ -348,11 +355,12 @@ export default function OpenScrollApp() {
 
   // Endless Infinite Scroll Loader
   async function handleLoadMoreCards() {
-    if (isLoadingMore || currentView !== "feed" || feedCursor === null) return;
+    if (isLoadingMore || currentView !== "feed" || (feedCursor === null && feedExhausted)) return;
     setIsLoadingMore(true);
 
     try {
-      const nextCursor = feedCursor;
+      const requestingNextSourceBatch = feedCursor === null;
+      const nextCursor = requestingNextSourceBatch ? 0 : feedCursor;
       const cleanInterest = (interest || "Culture").trim();
       const topicList = [...selectedTopics];
 
@@ -365,8 +373,9 @@ export default function OpenScrollApp() {
           topicWeights,
           feedback: localState.feedback,
           cursor: nextCursor,
-          pageSize: 20,
-          seed: feedSeed
+          pageSize: Math.max(25, topicList.length * 5),
+          seed: feedSeed,
+          sourceOffsets: feedSourceOffsets
         })
       });
 
@@ -376,6 +385,8 @@ export default function OpenScrollApp() {
       }
 
       const nextItems = payload?.data?.items || [];
+      setFeedSourceOffsets(payload?.data?.sourceOffsets || {});
+      setFeedExhausted(payload?.data?.sourceHasMore === false);
 
       if (nextItems.length) {
         const nextCards = nextItems.map(transformUcoToCard);
@@ -412,7 +423,7 @@ export default function OpenScrollApp() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [currentView, feedCursor, feedSeed, isLoadingMore, interest, selectedTopics]);
+  }, [currentView, feedCursor, feedSeed, feedSourceOffsets, feedExhausted, isLoadingMore, interest, selectedTopics]);
 
   function handleToggleSave(card) {
     const wasSaved = localState.saves.some((save) => save.itemId === card.id);
@@ -642,12 +653,17 @@ export default function OpenScrollApp() {
               );
             })}
 
-            {/* ENDLESS INFINITE SCROLL STREAM (NO HUMANE STOP) */}
+            {/* Infinite scroll stream */}
             <div ref={bottomSentinelRef} className="infinite-stream-sentinel" aria-live="polite">
               {isLoadingMore ? (
                 <div className="infinite-stream-loader">
                   <Sparkles className="icon-sm spin" aria-hidden="true" />
                   <span>Streaming further open discoveries...</span>
+                </div>
+              ) : feedExhausted ? (
+                <div className="infinite-stream-loader infinite-stream-loader--subtle">
+                  <span className="stream-dot" aria-hidden="true" />
+                  <span>You’ve reached the end of this Commons stream.</span>
                 </div>
               ) : (
                 <div className="infinite-stream-loader infinite-stream-loader--subtle">

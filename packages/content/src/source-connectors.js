@@ -114,9 +114,11 @@ export async function searchWikipediaLive(query, limit = 8) {
 // ---------------------------------------------------------------------------
 // 2. LIVE WIKIMEDIA COMMONS CONNECTOR (Images, Audio, Historical media)
 // ---------------------------------------------------------------------------
-export async function searchCommonsLive(query, limit = 12) {
+export async function searchCommonsLive(query, limit = 12, options = {}) {
   const cleanQ = encodeURIComponent(cleanString(query, 100));
-  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}&prop=imageinfo&iiprop=url|size|extmetadata|mime&format=json&origin=*`;
+  const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
+  const offsetQuery = offset ? `&gsroffset=${offset}` : "";
+  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime&format=json&origin=*`;
 
   const data = await safeFetch(url);
   if (!data?.query?.pages) return [];
@@ -284,7 +286,7 @@ export async function queryLiveConnectors(query, options = {}) {
     requests.push(searchWikipediaLive(query, explicitLimit ?? 6).catch(() => []));
   }
   if (sources.includes("wikimedia-commons")) {
-    requests.push(searchCommonsLive(query, explicitLimit ?? 12).catch(() => []));
+    requests.push(searchCommonsLive(query, explicitLimit ?? 12, { offset: options.offset }).catch(() => []));
   }
   if (sources.includes("met")) {
     requests.push(searchMetMuseumLive(query, explicitLimit ?? 6).catch(() => []));

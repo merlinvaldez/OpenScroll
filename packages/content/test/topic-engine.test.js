@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { expandTopics, resolveEntity, buildQueryPlan } from "../src/topic-engine.js";
+import { expandTopics, resolveEntity, evaluateFeedCandidates, buildQueryPlan } from "../src/topic-engine.js";
 
 function graphResponse() {
   return {
@@ -110,6 +110,40 @@ test("entity resolution also uses OpenAI only", async () => {
     assert.equal(entity.label, "Jazz");
     assert.equal(requests.length, 1);
     assert.equal(requests[0].url, "https://api.openai.com/v1/chat/completions");
+  } finally {
+    restore();
+  }
+});
+
+test("feed evaluation requires both main-topic and subtopic relevance", async () => {
+  const requests = [];
+  const restore = withMockedFetch(async (url, init) => {
+    requests.push({ url, init });
+    return mockResponse({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            evaluations: [
+              { candidateIndex: 0, mainTopicRelated: true, subtopicRelated: true, pass: true, reason: "The artifact directly represents the selected subtopic within the main topic." },
+              { candidateIndex: 1, mainTopicRelated: true, subtopicRelated: false, pass: false, reason: "The candidate matches the main topic but not the selected subtopic." }
+            ]
+          })
+        }
+      }]
+    });
+  });
+
+  try {
+    const result = await evaluateFeedCandidates("Morocco", "Amazigh weaving", [
+      { id: "pass", title: "Amazigh weaving in Morocco", description: "A textile artifact." },
+      { id: "reject", title: "Morocco coastline", description: "A landscape photograph." }
+    ], { apiKey: "test-key", model: "test-model" });
+
+    assert.deepEqual(result.accepted.map((candidate) => candidate.id), ["pass"]);
+    assert.equal(requests.length, 1);
+    const prompt = JSON.parse(requests[0].init.body).messages[1].content;
+    assert.match(prompt, /Morocco/);
+    assert.match(prompt, /Amazigh weaving/);
   } finally {
     restore();
   }

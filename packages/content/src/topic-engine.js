@@ -79,6 +79,91 @@ async function requestOpenAIJson(messages, options = {}) {
   }
 }
 
+function evaluationCandidate(candidate, index) {
+  return {
+    candidateIndex: index,
+    title: cleanString(candidate.content?.title || candidate.title, 160),
+    description: cleanString(candidate.content?.description || candidate.description, 300),
+    topics: unique([
+      ...(candidate.knowledge?.topics || []),
+      ...(candidate.content?.topics || []),
+      ...(candidate.topics || [])
+    ]).map((topic) => cleanString(topic, 120)).filter(Boolean).slice(0, 12),
+    source: cleanString(candidate.source?.name || candidate.source?.id || candidate.sourceId, 100),
+    mediaKind: cleanString(candidate.media?.kind || candidate.content?.type, 60)
+  };
+}
+
+export async function evaluateFeedCandidates(mainTopic, subtopic, candidates, options = {}) {
+  const cleanMainTopic = cleanString(mainTopic, 160);
+  const cleanSubtopic = cleanString(subtopic, 160);
+  if (!cleanMainTopic || !cleanSubtopic || !Array.isArray(candidates) || !candidates.length) {
+    return { accepted: [], evaluations: [] };
+  }
+
+  const candidateSummary = candidates.map(evaluationCandidate);
+  const payload = await requestOpenAIJson([
+    {
+      role: "system",
+      content: "You are OpenScroll's strict feed relevance evaluator. Output JSON only."
+    },
+    {
+      role: "user",
+      content: `Evaluate whether each candidate belongs in a feed for the main topic "${cleanMainTopic}" and the selected subtopic "${cleanSubtopic}".
+
+A candidate passes only when it is meaningfully related to BOTH the main topic and the subtopic. Reject incidental keyword matches, generic images, unrelated people or places, and candidates related to only one of the two. Do not infer relevance from the source name alone.
+
+Return exactly one evaluation for every candidate index in the input, with this JSON shape:
+{
+  "evaluations": [
+    {
+      "candidateIndex": 0,
+      "mainTopicRelated": true,
+      "subtopicRelated": true,
+      "pass": true,
+      "reason": "Short evidence-based explanation."
+    }
+  ]
+}
+
+Candidates:
+${JSON.stringify(candidateSummary)}`
+    }
+  ], options);
+
+  if (!Array.isArray(payload?.evaluations) || payload.evaluations.length !== candidates.length) {
+    throw new OpenAIRequestError("OpenAI returned an incomplete feed evaluation.");
+  }
+
+  const evaluations = new Array(candidates.length);
+  for (const evaluation of payload.evaluations) {
+    const index = evaluation?.candidateIndex;
+    if (!Number.isInteger(index) || index < 0 || index >= candidates.length || evaluations[index]) {
+      throw new OpenAIRequestError("OpenAI returned invalid feed evaluation indexes.");
+    }
+    if (typeof evaluation.mainTopicRelated !== "boolean" || typeof evaluation.subtopicRelated !== "boolean" || typeof evaluation.pass !== "boolean" || !cleanString(evaluation.reason, 300)) {
+      throw new OpenAIRequestError("OpenAI returned an invalid feed evaluation.");
+    }
+
+    evaluations[index] = {
+      candidateIndex: index,
+      mainTopicRelated: evaluation.mainTopicRelated,
+      subtopicRelated: evaluation.subtopicRelated,
+      pass: evaluation.pass,
+      reason: cleanString(evaluation.reason, 300)
+    };
+  }
+
+  if (evaluations.some((evaluation) => !evaluation)) {
+    throw new OpenAIRequestError("OpenAI did not evaluate every feed candidate.");
+  }
+
+  return {
+    evaluations,
+    accepted: candidates.filter((_, index) => evaluations[index].mainTopicRelated && evaluations[index].subtopicRelated && evaluations[index].pass)
+  };
+}
+
 function buildMindmapPrompt(query) {
   return `You are OpenScroll's knowledge graph engine. Analyze the concept "${query}" and return a precise, globally aware semantic knowledge graph.
 

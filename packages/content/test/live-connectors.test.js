@@ -65,12 +65,14 @@ test("queryLiveConnectors can fetch exactly five Commons results without fixture
     const items = await queryLiveConnectors("Generated topic", {
       sources: ["wikimedia-commons"],
       limit: 5,
+      offset: 5,
       allowFixtureFallback: false
     });
     assert.equal(items.length, 5);
     assert.equal(calls.length, 1);
     assert.match(calls[0], /commons\.wikimedia\.org/);
     assert.match(calls[0], /gsrlimit=5/);
+    assert.match(calls[0], /gsroffset=5/);
   } finally {
     globalThis.fetch = originalFetch;
   }
