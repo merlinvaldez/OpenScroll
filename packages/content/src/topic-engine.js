@@ -24,7 +24,7 @@ function getOpenAIConfig(options = {}) {
   const model = options.model || (typeof process !== "undefined" ? process.env?.OPENAI_MODEL : "") || DEFAULT_OPENAI_MODEL;
 
   if (!apiKey || !apiKey.trim()) {
-    throw new OpenAIConfigurationError("OPENAI_API_KEY is required for OpenScroll topic generation.");
+    throw new OpenAIConfigurationError("OPENAI_API_KEY is required for OpenScroll AI generation.");
   }
 
   return { apiKey: apiKey.trim(), model: model.trim() || DEFAULT_OPENAI_MODEL };
@@ -94,10 +94,9 @@ function evaluationCandidate(candidate, index) {
   };
 }
 
-export async function evaluateFeedCandidates(mainTopic, subtopic, candidates, options = {}) {
-  const cleanMainTopic = cleanString(mainTopic, 160);
-  const cleanSubtopic = cleanString(subtopic, 160);
-  if (!cleanMainTopic || !cleanSubtopic || !Array.isArray(candidates) || !candidates.length) {
+export async function evaluateFeedCandidates(term, candidates, options = {}) {
+  const cleanTerm = cleanString(term, 160);
+  if (!cleanTerm || !Array.isArray(candidates) || !candidates.length) {
     return { accepted: [], evaluations: [] };
   }
 
@@ -109,17 +108,16 @@ export async function evaluateFeedCandidates(mainTopic, subtopic, candidates, op
     },
     {
       role: "user",
-      content: `Evaluate whether each candidate belongs in a feed for the main topic "${cleanMainTopic}" and the selected subtopic "${cleanSubtopic}".
+      content: `Evaluate whether each candidate is semantically relevant to the search term "${cleanTerm}".
 
-A candidate passes only when it is meaningfully related to BOTH the main topic and the subtopic. Reject incidental keyword matches, generic images, unrelated people or places, and candidates related to only one of the two. Do not infer relevance from the source name alone.
+A candidate passes only when it is meaningfully about the search term. Reject incidental keyword matches, generic images, loosely associated people or places, and candidates whose relevance depends only on the source name. Use the title and description as evidence. Prefer a precise semantic match over a broad cultural association.
 
 Return exactly one evaluation for every candidate index in the input, with this JSON shape:
 {
   "evaluations": [
     {
       "candidateIndex": 0,
-      "mainTopicRelated": true,
-      "subtopicRelated": true,
+      "termRelated": true,
       "pass": true,
       "reason": "Short evidence-based explanation."
     }
@@ -141,14 +139,13 @@ ${JSON.stringify(candidateSummary)}`
     if (!Number.isInteger(index) || index < 0 || index >= candidates.length || evaluations[index]) {
       throw new OpenAIRequestError("OpenAI returned invalid feed evaluation indexes.");
     }
-    if (typeof evaluation.mainTopicRelated !== "boolean" || typeof evaluation.subtopicRelated !== "boolean" || typeof evaluation.pass !== "boolean" || !cleanString(evaluation.reason, 300)) {
+    if (typeof evaluation.termRelated !== "boolean" || typeof evaluation.pass !== "boolean" || !cleanString(evaluation.reason, 300)) {
       throw new OpenAIRequestError("OpenAI returned an invalid feed evaluation.");
     }
 
     evaluations[index] = {
       candidateIndex: index,
-      mainTopicRelated: evaluation.mainTopicRelated,
-      subtopicRelated: evaluation.subtopicRelated,
+      termRelated: evaluation.termRelated,
       pass: evaluation.pass,
       reason: cleanString(evaluation.reason, 300)
     };
@@ -160,7 +157,7 @@ ${JSON.stringify(candidateSummary)}`
 
   return {
     evaluations,
-    accepted: candidates.filter((_, index) => evaluations[index].mainTopicRelated && evaluations[index].subtopicRelated && evaluations[index].pass)
+    accepted: candidates.filter((_, index) => evaluations[index].termRelated && evaluations[index].pass)
   };
 }
 

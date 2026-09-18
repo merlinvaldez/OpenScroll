@@ -96,7 +96,7 @@ export function WhyThisSheet({ open, card, rootInterest = "Morocco", onClose, on
             <span className="node-dot" />
             <div>
               <strong>{card.topic}</strong>
-              <small>Selected topic dimension</small>
+              <small>Semantic match to the search term</small>
             </div>
           </div>
           <div className="tree-node tree-node--leaf">

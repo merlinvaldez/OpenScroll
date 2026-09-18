@@ -115,7 +115,7 @@ test("entity resolution also uses OpenAI only", async () => {
   }
 });
 
-test("feed evaluation requires both main-topic and subtopic relevance", async () => {
+test("feed evaluation requires semantic relevance to the search term", async () => {
   const requests = [];
   const restore = withMockedFetch(async (url, init) => {
     requests.push({ url, init });
@@ -124,8 +124,8 @@ test("feed evaluation requires both main-topic and subtopic relevance", async ()
         message: {
           content: JSON.stringify({
             evaluations: [
-              { candidateIndex: 0, mainTopicRelated: true, subtopicRelated: true, pass: true, reason: "The artifact directly represents the selected subtopic within the main topic." },
-              { candidateIndex: 1, mainTopicRelated: true, subtopicRelated: false, pass: false, reason: "The candidate matches the main topic but not the selected subtopic." }
+              { candidateIndex: 0, termRelated: true, pass: true, reason: "The artifact directly represents Morocco." },
+              { candidateIndex: 1, termRelated: false, pass: false, reason: "The candidate is not meaningfully about Morocco." }
             ]
           })
         }
@@ -134,8 +134,8 @@ test("feed evaluation requires both main-topic and subtopic relevance", async ()
   });
 
   try {
-    const result = await evaluateFeedCandidates("Morocco", "Amazigh weaving", [
-      { id: "pass", title: "Amazigh weaving in Morocco", description: "A textile artifact." },
+    const result = await evaluateFeedCandidates("Morocco", [
+      { id: "pass", title: "Morocco", description: "A textile artifact from Morocco." },
       { id: "reject", title: "Morocco coastline", description: "A landscape photograph." }
     ], { apiKey: "test-key", model: "test-model" });
 
@@ -143,7 +143,8 @@ test("feed evaluation requires both main-topic and subtopic relevance", async ()
     assert.equal(requests.length, 1);
     const prompt = JSON.parse(requests[0].init.body).messages[1].content;
     assert.match(prompt, /Morocco/);
-    assert.match(prompt, /Amazigh weaving/);
+    assert.match(prompt, /semantically relevant to the search term/);
+    assert.doesNotMatch(prompt, /selected subtopic/);
   } finally {
     restore();
   }

@@ -54,7 +54,7 @@ export function MetadataRow({ card, messages, locale }) {
     <div className="meta-row">
       {card.topic ? (
         <>
-          <span className="mindmap-topic-badge" title={`Mindmap Topic: ${card.topic}`}>
+          <span className="mindmap-topic-badge" title={`Semantic match: ${card.topic}`}>
             ✦ {card.topic}
           </span>
           <span className="meta-separator" aria-hidden="true">•</span>

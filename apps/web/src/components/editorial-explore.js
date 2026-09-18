@@ -9,8 +9,7 @@ const FEATURED_JOURNEYS = [
     query: "Morocco",
     description: "From historic Fez medinas to sacred Gnawa acoustic traditions and earthen architecture.",
     icon: Globe2,
-    badge: "Featured Culture",
-    topics: ["Music", "Architecture", "History", "Darija"]
+    badge: "Featured Culture"
   },
   {
     id: "renaissance-astronomy",
@@ -18,8 +17,7 @@ const FEATURED_JOURNEYS = [
     query: "Astronomy",
     description: "Historical star charts, astrolabes, manuscript folios, and public domain observations.",
     icon: Sparkles,
-    badge: "Open Science",
-    topics: ["History", "Open data", "Architecture"]
+    badge: "Open Science"
   },
   {
     id: "ancient-silk-road",
@@ -27,8 +25,7 @@ const FEATURED_JOURNEYS = [
     query: "Silk Road",
     description: "Centuries of cross-continental trade, textile crafts, manuscript illumination, and archaeological sites.",
     icon: Landmark,
-    badge: "Archaeology",
-    topics: ["History", "Culture", "Architecture"]
+    badge: "Archaeology"
   },
   {
     id: "global-acoustic-traditions",
@@ -36,8 +33,7 @@ const FEATURED_JOURNEYS = [
     query: "Oral Tradition",
     description: "Archival ethnomusicology, field recordings, and polyphonic performance traditions.",
     icon: Music2,
-    badge: "Sound Commons",
-    topics: ["Music", "Culture", "History"]
+    badge: "Sound Commons"
   }
 ];
 
@@ -60,7 +56,7 @@ export function EditorialExplore({ onSelectJourney, messages, locale }) {
               <article
                 key={journey.id}
                 className="journey-card"
-                onClick={() => onSelectJourney(journey.query, journey.topics)}
+                onClick={() => onSelectJourney(journey.query)}
                 tabIndex="0"
               >
                 <div className="journey-card-header">

@@ -1,19 +1,18 @@
 import { queryLiveConnectors, evaluateFeedCandidates, composeDiversityFeed } from "@openscroll/content";
 import { NextResponse } from "next/server";
 
-const PASSING_RESULTS_PER_TOPIC = 5;
+const PASSING_RESULTS_PER_BATCH = 25;
 const EVALUATION_BATCH_SIZE = 5;
 const MAX_REQUERY_ROUNDS = 20;
 
-async function fetchPassingTopicResults(mainTopic, subtopic, startOffset = 0) {
+async function fetchPassingTermResults(term, startOffset = 0) {
   const passing = [];
   const seenIds = new Set();
   let offset = Number.isInteger(startOffset) && startOffset >= 0 ? startOffset : 0;
   let sourceExhausted = false;
 
-  for (let round = 0; round < MAX_REQUERY_ROUNDS && passing.length < PASSING_RESULTS_PER_TOPIC; round += 1) {
-    const searchQuery = `${mainTopic} ${subtopic}`.trim();
-    const candidates = await queryLiveConnectors(searchQuery, {
+  for (let round = 0; round < MAX_REQUERY_ROUNDS && passing.length < PASSING_RESULTS_PER_BATCH; round += 1) {
+    const candidates = await queryLiveConnectors(term, {
       limit: EVALUATION_BATCH_SIZE,
       offset,
       sources: ["wikimedia-commons"],
@@ -30,9 +29,9 @@ async function fetchPassingTopicResults(mainTopic, subtopic, startOffset = 0) {
       break;
     }
 
-    const evaluation = await evaluateFeedCandidates(mainTopic, subtopic, freshCandidates);
+    const evaluation = await evaluateFeedCandidates(term, freshCandidates);
     for (const candidate of evaluation.accepted) {
-      if (passing.length < PASSING_RESULTS_PER_TOPIC) passing.push(candidate);
+      if (passing.length < PASSING_RESULTS_PER_BATCH) passing.push(candidate);
     }
 
     offset += candidates.length;
@@ -53,10 +52,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const {
-      interest = "Culture",
-      topics = [],
-      topicWeights = {},
-      excludedTopics = [],
+      interest = "",
       feedback = [],
       cursor = 0,
       pageSize = 25,
@@ -64,42 +60,28 @@ export async function POST(request) {
       sourceOffsets = {}
     } = body;
 
-    const searchQueries = Array.from(new Set((Array.isArray(topics) ? topics : []).filter((topic) => typeof topic === "string" && topic.trim())));
-    if (!searchQueries.length) {
-      return NextResponse.json({ error: "At least one topic is required" }, { status: 400 });
+    const searchTerm = typeof interest === "string" ? interest.trim() : "";
+    if (!searchTerm) {
+      return NextResponse.json({ error: "A search term is required" }, { status: 400 });
     }
 
-    // Fetch exactly up to five evaluated Wikimedia Commons results for every selected topic.
-    const topicResults = await Promise.all(
-      searchQueries.map(async (query) => {
-        const result = await fetchPassingTopicResults(interest, query, sourceOffsets?.[query]);
-        const items = result.items.map((item) => ({
-          ...item,
-          knowledge: {
-            ...(item.knowledge || {}),
-            topics: Array.from(new Set([...(item.knowledge?.topics || []), interest, query]))
-          }
-        }));
-        return {
-          query,
-          items,
-          nextOffset: result.nextOffset,
-          hasMore: result.hasMore
-        };
-      })
-    );
-
-    const candidates = topicResults.flatMap(({ items }) => items);
-    const nextSourceOffsets = Object.fromEntries(
-      topicResults.map(({ query, nextOffset }) => [query, nextOffset])
-    );
+    // Fetch a single term-based batch from Wikimedia Commons, then keep only
+    // candidates that OpenAI judges semantically relevant to that term.
+    const termResult = await fetchPassingTermResults(searchTerm, sourceOffsets?.[searchTerm]);
+    const candidates = termResult.items.map((item) => ({
+      ...item,
+      knowledge: {
+        ...(item.knowledge || {}),
+        topics: Array.from(new Set([...(item.knowledge?.topics || []), searchTerm]))
+      }
+    }));
 
     const result = composeDiversityFeed(candidates, {
       interestGraph: {
-        interest,
-        topics,
-        topicWeights,
-        excludedTopics
+        interest: searchTerm,
+        topics: [],
+        topicWeights: {},
+        excludedTopics: []
       },
       feedback,
       cursor,
@@ -112,8 +94,8 @@ export async function POST(request) {
       requestId: crypto.randomUUID(),
       data: {
         ...result,
-        sourceOffsets: nextSourceOffsets,
-        sourceHasMore: topicResults.some(({ hasMore }) => hasMore)
+        sourceOffsets: { [searchTerm]: termResult.nextOffset },
+        sourceHasMore: termResult.hasMore
       }
     });
   } catch (error) {

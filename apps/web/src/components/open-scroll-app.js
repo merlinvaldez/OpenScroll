@@ -4,27 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
-  Bookmark,
-  BookmarkCheck,
-  Check,
-  Compass,
-  Database,
   Download,
   Eraser,
   FileInput,
-  GitBranch,
   Globe2,
   HardDrive,
-  Languages,
-  Minus,
-  Music2,
-  Plus,
   RotateCcw,
   Search,
   SlidersHorizontal,
-  Sparkles,
-  X
+  Sparkles
 } from "lucide-react";
 import {
   canonicalMoroccoSample
@@ -40,11 +28,9 @@ import {
 import { SavedLibrary } from "./saved-library";
 import { ScrollsManager } from "./scrolls-manager";
 import { EditorialExplore } from "./editorial-explore";
-import { TopicMindmap } from "./topic-mindmap";
-import { Chip, IconButton, Sheet, Toast } from "./primitives";
+import { IconButton, Sheet, Toast } from "./primitives";
 import { directionFor, formatItemCount, messages as catalog } from "../i18n/messages";
 import {
-  DEFAULT_PREFERENCES,
   clearLocalHistory,
   createDefaultLocalState,
   getDeviceStorageStatus,
@@ -108,16 +94,10 @@ function createFeedSeed() {
 }
 
 export default function OpenScrollApp() {
-  // Navigation: "explore" | "search" | "topics" | "feed" | "scrolls" | "saved" | "settings"
+  // Navigation: "explore" | "search" | "feed" | "scrolls" | "saved" | "settings"
   const [currentView, setCurrentView] = useState("search");
   const [interest, setInterest] = useState("");
-  const [selectedTopics, setSelectedTopics] = useState(new Set(DEFAULT_PREFERENCES.topics));
-  const [topicWeights, setTopicWeights] = useState({});
-  const [topicCategories, setTopicCategories] = useState([]);
-  const [mindmapTopology, setMindmapTopology] = useState(null);
-  const [resolvedEntity, setResolvedEntity] = useState(null);
-  const [isLoadingTopics, setIsLoadingTopics] = useState(false);
-  const [topicError, setTopicError] = useState("");
+  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
 
   const [cards, setCards] = useState(INITIAL_CARDS);
   const [feedCursor, setFeedCursor] = useState(0);
@@ -147,45 +127,12 @@ export default function OpenScrollApp() {
   function applyJourneyState(nextState) {
     const saved = preferencesFromState(nextState);
     if (saved.interest) setInterest(saved.interest);
-    if (saved.topics?.length) setSelectedTopics(new Set(saved.topics));
     setLocale(saved.locale);
     setTheme(saved.theme);
   }
 
   async function refreshStorageEstimate() {
     setStorageEstimate(await getDeviceStorageStatus());
-  }
-
-  async function requestTopicExpansion(query) {
-    const response = await fetch("/api/topics/expand", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query })
-    });
-
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch {
-      // The route must return an OpenAI error payload. Do not synthesize content here.
-    }
-
-    if (!response.ok) {
-      throw new Error(payload?.message || payload?.error || "OpenAI topic generation failed.");
-    }
-
-    if (!payload?.data) {
-      throw new Error("OpenAI topic generation returned no data.");
-    }
-
-    return payload.data;
-  }
-
-  function applyExpandedTopics(expanded, defaultTopics = []) {
-    setResolvedEntity(expanded.entity);
-    setTopicCategories(expanded.categories);
-    setMindmapTopology(expanded.mindmap || null);
-    setSelectedTopics(new Set(defaultTopics.length ? defaultTopics : expanded.flatTopics.slice(0, 4).map((topic) => topic.name)));
   }
 
   function commitState(nextState, message, { syncJourney = false } = {}) {
@@ -252,55 +199,26 @@ export default function OpenScrollApp() {
     }
   }, [currentView]);
 
-  // Topic expansion on interest entry
   async function handleSearchSubmit(event) {
     if (event) event.preventDefault();
     const query = interest.trim();
     if (!query) return;
-
-    setIsLoadingTopics(true);
-    setCurrentView("topics");
-    setTopicError("");
-    setResolvedEntity(null);
-    setTopicCategories([]);
-    setMindmapTopology(null);
-
-    try {
-      applyExpandedTopics(await requestTopicExpansion(query));
-    } catch (error) {
-      setTopicError(error.message);
-    } finally {
-      setIsLoadingTopics(false);
-    }
+    await handleBuildScroll(query);
   }
 
-  function toggleTopicSelection(topicName) {
-    setSelectedTopics((current) => {
-      const next = new Set(current);
-      if (next.has(topicName)) {
-        next.delete(topicName);
-      } else {
-        next.add(topicName);
-      }
-      return next;
-    });
-  }
-
-  async function handleBuildScroll(overrideInterest, overrideTopics) {
+  async function handleBuildScroll(overrideInterest) {
     const isStringOverride = typeof overrideInterest === "string";
-    const cleanInterest = (isStringOverride ? overrideInterest : (interest || "Culture")).trim();
+    const cleanInterest = (isStringOverride ? overrideInterest : interest).trim();
 
-    const isExplicitTopicArray = Array.isArray(overrideTopics) || overrideTopics instanceof Set;
-    const topicSet = isExplicitTopicArray ? new Set(overrideTopics) : selectedTopics;
-
-    if (!topicSet.size) {
-      setToast(messages.empty);
+    if (!cleanInterest) {
+      setToast("Enter a search term to build a feed.");
       return;
     }
 
-    const topicList = [...topicSet];
     const nextSeed = createFeedSeed();
-    setIsLoadingTopics(true);
+    setIsLoadingFeed(true);
+    setCurrentView("feed");
+    setCards([]);
     setFeedSeed(nextSeed);
     setFeedCursor(null);
     setFeedSourceOffsets({});
@@ -312,10 +230,8 @@ export default function OpenScrollApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interest: cleanInterest,
-          topics: topicList,
-          topicWeights,
           feedback: localState.feedback,
-          pageSize: Math.max(25, topicList.length * 5),
+          pageSize: 25,
           seed: nextSeed
         })
       });
@@ -327,7 +243,12 @@ export default function OpenScrollApp() {
 
       const composedItems = payload?.data?.items || [];
       if (!composedItems.length) {
-        throw new Error("Wikimedia Commons returned no eligible results for these topics.");
+        setCards([]);
+        setFeedCursor(null);
+        setFeedSourceOffsets(payload?.data?.sourceOffsets || {});
+        setFeedExhausted(true);
+        setToast("No semantic matches found. End of feed.");
+        return;
       }
 
       const transformedCards = composedItems.map(transformUcoToCard);
@@ -340,7 +261,7 @@ export default function OpenScrollApp() {
       commitState(
         recordScrollCreation(localState, {
           interest: cleanInterest,
-          topics: topicList
+          topics: [cleanInterest]
         }),
         messages.saved
       );
@@ -349,31 +270,28 @@ export default function OpenScrollApp() {
     } catch (error) {
       setToast(error.message);
     } finally {
-      setIsLoadingTopics(false);
+      setIsLoadingFeed(false);
     }
   }
 
   // Endless Infinite Scroll Loader
   async function handleLoadMoreCards() {
-    if (isLoadingMore || currentView !== "feed" || (feedCursor === null && feedExhausted)) return;
+    if (isLoadingFeed || isLoadingMore || currentView !== "feed" || (feedCursor === null && feedExhausted)) return;
     setIsLoadingMore(true);
 
     try {
       const requestingNextSourceBatch = feedCursor === null;
       const nextCursor = requestingNextSourceBatch ? 0 : feedCursor;
-      const cleanInterest = (interest || "Culture").trim();
-      const topicList = [...selectedTopics];
+      const cleanInterest = interest.trim();
 
       const res = await fetch("/api/feed/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           interest: cleanInterest,
-          topics: topicList,
-          topicWeights,
           feedback: localState.feedback,
           cursor: nextCursor,
-          pageSize: Math.max(25, topicList.length * 5),
+          pageSize: 25,
           seed: feedSeed,
           sourceOffsets: feedSourceOffsets
         })
@@ -386,7 +304,7 @@ export default function OpenScrollApp() {
 
       const nextItems = payload?.data?.items || [];
       setFeedSourceOffsets(payload?.data?.sourceOffsets || {});
-      setFeedExhausted(payload?.data?.sourceHasMore === false);
+      setFeedExhausted(!nextItems.length || payload?.data?.sourceHasMore === false);
 
       if (nextItems.length) {
         const nextCards = nextItems.map(transformUcoToCard);
@@ -414,7 +332,7 @@ export default function OpenScrollApp() {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isLoadingMore) {
+        if (entries[0].isIntersecting && !isLoadingFeed && !isLoadingMore) {
           handleLoadMoreCards();
         }
       },
@@ -423,7 +341,7 @@ export default function OpenScrollApp() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [currentView, feedCursor, feedSeed, feedSourceOffsets, feedExhausted, isLoadingMore, interest, selectedTopics]);
+  }, [currentView, feedCursor, feedSeed, feedSourceOffsets, feedExhausted, isLoadingFeed, isLoadingMore, interest]);
 
   function handleToggleSave(card) {
     const wasSaved = localState.saves.some((save) => save.itemId === card.id);
@@ -438,49 +356,23 @@ export default function OpenScrollApp() {
   function handleBranchExplore(concept) {
     setInterest(concept);
     setActiveModal(null);
-    setCurrentView("topics");
-    setIsLoadingTopics(true);
-    setTopicError("");
-    setResolvedEntity(null);
-    setTopicCategories([]);
-    setMindmapTopology(null);
-    requestTopicExpansion(concept).then((expanded) => {
-      applyExpandedTopics(expanded);
-    }).catch((error) => {
-      setTopicError(error.message);
-    }).finally(() => {
-      setIsLoadingTopics(false);
-    });
+    handleBuildScroll(concept);
   }
 
   function handleAddToScroll(concept) {
-    setSelectedTopics((prev) => new Set([...prev, concept]));
+    setInterest((current) => [current, concept].filter(Boolean).join(" "));
     setActiveModal(null);
     setToast(`Added ${concept} to current Scroll`);
   }
 
   function handleSelectScroll(scroll) {
     setInterest(scroll.interest);
-    setSelectedTopics(new Set(scroll.topics));
-    handleBuildScroll(scroll.interest, scroll.topics);
+    handleBuildScroll(scroll.interest);
   }
 
-  function handleStartExploreJourney(query, defaultTopics = []) {
+  function handleStartExploreJourney(query) {
     setInterest(query);
-    setSelectedTopics(new Set(defaultTopics));
-    setCurrentView("topics");
-    setIsLoadingTopics(true);
-    setTopicError("");
-    setResolvedEntity(null);
-    setTopicCategories([]);
-    setMindmapTopology(null);
-    requestTopicExpansion(query).then((expanded) => {
-      applyExpandedTopics(expanded, defaultTopics);
-    }).catch((error) => {
-      setTopicError(error.message);
-    }).finally(() => {
-      setIsLoadingTopics(false);
-    });
+    handleBuildScroll(query);
   }
 
   function handleOpenViewer(card, mode) {
@@ -575,49 +467,11 @@ export default function OpenScrollApp() {
           </section>
         ) : null}
 
-        {/* VIEW 2: TOPIC SELECTION (INTERACTIVE MINDMAP) */}
-        {currentView === "topics" ? (
-          <section className="screen topic-screen" aria-label={messages.choose}>
-            <header className="topic-screen-header">
-              <IconButton className="back-control" label={messages.back} onClick={() => setCurrentView("search")}>
-                <ArrowLeft className="directional-icon" aria-hidden="true" />
-              </IconButton>
-            </header>
-
-            {isLoadingTopics ? (
-              <div className="topics-loading" style={{ textAlign: "center", padding: "48px 0" }}>
-                <Sparkles className="icon-sm" style={{ margin: "0 auto 12px", color: "var(--os-primary)" }} />
-                <h3 style={{ margin: "0 0 8px", font: "400 24px var(--os-font-display)" }}>Generating Knowledge Mindmap...</h3>
-                <p style={{ margin: 0, color: "var(--os-muted)" }}>Asking OpenAI to map &ldquo;{interest}&rdquo;</p>
-              </div>
-            ) : topicError ? (
-              <div className="topics-error" role="alert" style={{ textAlign: "center", padding: "48px 0" }}>
-                <h3 style={{ margin: "0 0 8px", font: "400 24px var(--os-font-display)" }}>OpenAI could not generate this mindmap</h3>
-                <p style={{ margin: 0, color: "var(--os-muted)" }}>{topicError}</p>
-              </div>
-            ) : (
-              <TopicMindmap
-                query={interest}
-                entity={resolvedEntity}
-                categories={topicCategories}
-                mindmap={mindmapTopology}
-                selectedTopics={selectedTopics}
-                onToggleTopic={toggleTopicSelection}
-                onSelectAll={() => setSelectedTopics(new Set(topicCategories.flatMap((category) => category.topics.map((topic) => topic.name))))}
-                onClearAll={() => setSelectedTopics(new Set())}
-                onBuildScroll={() => handleBuildScroll(interest, selectedTopics)}
-                isLoading={isLoadingTopics}
-                messages={messages}
-              />
-            )}
-          </section>
-        ) : null}
-
-        {/* VIEW 3: MULTIMEDIA FEED */}
+        {/* VIEW 2: MULTIMEDIA FEED */}
         {currentView === "feed" ? (
           <section className="feed" aria-label={`${interest} stream`}>
             <header className="feed-header">
-              <IconButton label={messages.back} onClick={() => setCurrentView("topics")}>
+              <IconButton label={messages.back} onClick={() => setCurrentView("search")}>
                 <ArrowLeft className="directional-icon" aria-hidden="true" />
               </IconButton>
               <strong dir="auto">{interest}</strong>
@@ -655,15 +509,15 @@ export default function OpenScrollApp() {
 
             {/* Infinite scroll stream */}
             <div ref={bottomSentinelRef} className="infinite-stream-sentinel" aria-live="polite">
-              {isLoadingMore ? (
+              {isLoadingFeed || isLoadingMore ? (
                 <div className="infinite-stream-loader">
                   <Sparkles className="icon-sm spin" aria-hidden="true" />
-                  <span>Streaming further open discoveries...</span>
+                  <span>Loading more from the open feed...</span>
                 </div>
               ) : feedExhausted ? (
                 <div className="infinite-stream-loader infinite-stream-loader--subtle">
                   <span className="stream-dot" aria-hidden="true" />
-                  <span>You’ve reached the end of this Commons stream.</span>
+                  <span>End of feed</span>
                 </div>
               ) : (
                 <div className="infinite-stream-loader infinite-stream-loader--subtle">
@@ -904,8 +758,8 @@ export default function OpenScrollApp() {
             <p className="local-disclosure">{messages.localDisclosure}</p>
             <dl className="storage-status">
               <div>
-                <dt>{messages.choose}</dt>
-                <dd>{formatItemCount(locale, selectedTopics.size)}</dd>
+                <dt>{messages.interest}</dt>
+                <dd dir="auto">{interest}</dd>
               </div>
               <div>
                 <dt>{messages.savedItems}</dt>
