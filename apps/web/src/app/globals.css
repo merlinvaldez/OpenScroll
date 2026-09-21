@@ -710,6 +710,13 @@ button:disabled {
   box-shadow: var(--os-shadow-subtle);
 }
 
+.reader-card-title {
+  margin: 0;
+  color: var(--os-ink);
+  font: 400 clamp(26px, 4vw, 42px)/1.08 var(--os-font-display);
+  letter-spacing: -0.03em;
+}
+
 .primary-source-tag {
   display: inline-block;
   width: max-content;
@@ -1417,6 +1424,10 @@ button:disabled {
   z-index: 10;
 }
 
+.focused-header--reader {
+  justify-content: flex-end;
+}
+
 .focused-header h2 {
   margin: 0;
   font: 400 22px var(--os-font-display);
@@ -1449,12 +1460,13 @@ button:disabled {
 }
 
 .focused-reader-container {
+  width: min(100%, 760px);
   max-width: 720px;
   padding: 32px;
   background: var(--os-surface);
   color: var(--os-ink);
   border-radius: var(--os-radius-md);
-  max-height: 80vh;
+  max-height: calc(100dvh - 96px);
   overflow-y: auto;
 }
 
@@ -1464,9 +1476,59 @@ button:disabled {
 }
 
 .reader-lead {
+  margin: 0 0 24px;
   font-size: 18px;
+  line-height: 1.65;
   font-style: italic;
   color: var(--os-muted);
+}
+
+.reader-image-stack {
+  display: grid;
+  gap: 18px;
+  margin: 0 0 28px;
+}
+
+.reader-image-figure {
+  margin: 0;
+}
+
+.reader-article-image {
+  display: block;
+  width: 100%;
+  max-height: 460px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: #111412;
+}
+
+.reader-image-figure figcaption {
+  margin-top: 8px;
+  color: var(--os-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.reader-body {
+  display: grid;
+  gap: 22px;
+  color: var(--os-ink);
+  font-size: 17px;
+  line-height: 1.8;
+}
+
+.reader-body p {
+  margin: 0;
+}
+
+.reader-section {
+  display: grid;
+  gap: 8px;
+}
+
+.reader-section h2 {
+  margin: 0;
+  font: 600 22px/1.25 var(--os-font-display);
 }
 
 /* SETTINGS VIEW */

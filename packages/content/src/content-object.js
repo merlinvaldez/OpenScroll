@@ -53,6 +53,17 @@ export function createUniversalContentObject(record, options = {}) {
   })).filter((place) => place.label);
   const topics = unique(asArray(record.topics).map((topic) => cleanString(topic, 80)).filter(Boolean));
   const languages = unique(asArray(record.languages).map((language) => cleanString(language, 24)).filter(Boolean));
+  const contentText = cleanString(record.content?.text || record.text || "", 20000);
+  const contentSections = asArray(record.content?.sections).map((section) => ({
+    heading: cleanString(section?.heading, 180),
+    content: cleanString(section?.content || section?.text, 12000)
+  })).filter((section) => section.content);
+  const contentImages = asArray(record.content?.images || record.images).map((image) => ({
+    url: cleanString(image?.url || image, 300),
+    thumbnailUrl: cleanString(image?.thumbnailUrl, 300),
+    altText: cleanString(image?.altText || image?.caption || "", 300),
+    caption: cleanString(image?.caption, 300)
+  })).filter((image) => image.url);
   const object = {
     schemaVersion: UNIVERSAL_CONTENT_OBJECT_VERSION,
     id: createContentId(record),
@@ -64,10 +75,14 @@ export function createUniversalContentObject(record, options = {}) {
       stableKey: `${source.id}:${cleanString(record.sourceItemId || record.id, 180)}`
     },
     content: {
-      type: cleanString(record.type, 40),
+      type: cleanString(record.type || record.content?.type, 40),
       title: cleanString(record.title, 180),
       originalTitle: cleanString(record.originalTitle || record.title, 180),
       description: cleanString(record.description, 500),
+      text: contentText,
+      sections: contentSections,
+      images: contentImages,
+      readingTimeSeconds: Number.isFinite(record.content?.readingTimeSeconds) ? record.content.readingTimeSeconds : null,
       topics
     },
     creator: {

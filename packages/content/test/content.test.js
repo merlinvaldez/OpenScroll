@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   EPIC_C_CONNECTORS,
+  EPIC_C_RAW_ITEMS,
   SOURCE_REGISTRY,
   canonicalMoroccoSample,
   createConnector,
@@ -48,6 +49,29 @@ test("OS-014 Source Registry stores behavior, rights, quality, refresh, terms, a
     assert.ok(source.refresh.cadence);
     assert.ok(source.health.status);
   }
+});
+
+test("article content preserves reading text, sections, and images through UCO normalization", () => {
+  const article = createUniversalContentObject({
+    ...EPIC_C_RAW_ITEMS[0],
+    type: "article",
+    content: {
+      type: "reader",
+      text: "The article begins with an accessible lead.",
+      sections: [{ heading: "History", content: "The article continues with its first section." }],
+      images: [{ url: "https://example.org/article-image.jpg", altText: "An archival scene", caption: "Archival scene" }]
+    },
+    media: {
+      kind: "image",
+      url: "https://example.org/article-image.jpg",
+      accessibility: { altText: "An archival scene" }
+    }
+  });
+
+  assert.equal(article.content.type, "article");
+  assert.equal(article.content.text, "The article begins with an accessible lead.");
+  assert.equal(article.content.sections[0].heading, "History");
+  assert.equal(article.content.images[0].altText, "An archival scene");
 });
 
 test("OS-015 through OS-020 connectors pass the SDK conformance suite", async () => {

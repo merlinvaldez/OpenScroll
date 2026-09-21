@@ -33,9 +33,11 @@ async function safeFetch(url, options = {}, timeoutMs = 6000) {
 // ---------------------------------------------------------------------------
 // 1. LIVE WIKIPEDIA / WIKIMEDIA KNOWLEDGE CONNECTOR
 // ---------------------------------------------------------------------------
-export async function searchWikipediaLive(query, limit = 8) {
+export async function searchWikipediaLive(query, limit = 8, options = {}) {
   const cleanQ = encodeURIComponent(cleanString(query, 100));
-  const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${cleanQ}&format=json&srlimit=${limit}&origin=*`;
+  const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
+  const offsetQuery = offset ? `&sroffset=${offset}` : "";
+  const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${cleanQ}&format=json&srlimit=${limit}${offsetQuery}&origin=*`;
   
   const searchData = await safeFetch(searchUrl);
   if (!searchData?.query?.search) return [];
@@ -316,7 +318,7 @@ export async function queryLiveConnectors(query, options = {}) {
   const requests = [];
 
   if (sources.includes("wikipedia")) {
-    requests.push(searchWikipediaLive(query, explicitLimit ?? 6).catch(() => []));
+    requests.push(searchWikipediaLive(query, explicitLimit ?? 6, { offset: options.offset }).catch(() => []));
   }
   if (sources.includes("wikimedia-commons")) {
     requests.push(searchCommonsLive(query, explicitLimit ?? 12, { offset: options.offset, mediaType: options.mediaType }).catch(() => []));

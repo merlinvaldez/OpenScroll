@@ -5,6 +5,13 @@ const PASSING_RESULTS_PER_BATCH = 25;
 const EVALUATION_BATCH_SIZE = 5;
 const MAX_REQUERY_ROUNDS = 20;
 const MEDIA_TYPE_KINDS = Object.freeze({ images: "image", audio: "audio", video: "video", text: "text", data: "data" });
+const MEDIA_TYPE_SOURCES = Object.freeze({ images: ["wikimedia-commons"], audio: ["wikimedia-commons"], video: ["wikimedia-commons"], text: ["wikipedia"], data: ["wikimedia-commons"] });
+const TEXT_CONTENT_TYPES = new Set(["article", "reader", "source-text", "dictionary", "travel-guide", "text"]);
+
+function candidateMatchesMediaType(candidate, mediaType) {
+  if (mediaType === "text") return candidate.media?.kind === "text" || TEXT_CONTENT_TYPES.has(candidate.content?.type);
+  return candidate.media?.kind === MEDIA_TYPE_KINDS[mediaType];
+}
 
 function normalizeMediaTypes(value) {
   if (!Array.isArray(value)) return Object.keys(MEDIA_TYPE_KINDS);
@@ -37,7 +44,7 @@ async function fetchPassingTermResults(term, mediaTypes, startOffsets = {}) {
         limit: EVALUATION_BATCH_SIZE,
         offset: nextOffsets[mediaType],
         mediaType: MEDIA_TYPE_KINDS[mediaType],
-        sources: ["wikimedia-commons"],
+        sources: MEDIA_TYPE_SOURCES[mediaType],
         allowFixtureFallback: false
       })
     })));
@@ -59,7 +66,7 @@ async function fetchPassingTermResults(term, mediaTypes, startOffsets = {}) {
 
     const evaluation = await evaluateFeedCandidates(term, freshCandidates);
     for (const candidate of evaluation.accepted) {
-      const mediaType = mediaTypes.find((type) => MEDIA_TYPE_KINDS[type] === candidate.media?.kind);
+      const mediaType = mediaTypes.find((type) => candidateMatchesMediaType(candidate, type));
       if (mediaType && passingCount() < PASSING_RESULTS_PER_BATCH) {
         passingByMediaType.get(mediaType).push(candidate);
       }

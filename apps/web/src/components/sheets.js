@@ -22,6 +22,28 @@ import {
 } from "lucide-react";
 import { Sheet } from "./primitives";
 
+function readerText(card) {
+  const content = card.object?.content || {};
+  return content.text || content.sections?.map((section) => section.content).filter(Boolean).join("\n\n") || content.description || "Open knowledge overview and verified archival documentation.";
+}
+
+function readerParagraphs(text) {
+  return text.split(/\n{2,}|\r?\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+}
+
+function readerImages(card) {
+  const contentImages = Array.isArray(card.object?.content?.images) ? card.object.content.images : [];
+  const media = card.object?.media;
+  const mediaImage = media?.kind === "image" && media.url ? [media] : [];
+  const seen = new Set();
+
+  return [...contentImages, ...mediaImage].filter((image) => {
+    if (!image?.url || seen.has(image.url)) return false;
+    seen.add(image.url);
+    return true;
+  });
+}
+
 export function BranchExplorationSheet({ open, card, onClose, onExploreBranch, onAddToScroll, messages, locale }) {
   if (!card) return null;
   const isArabic = locale === "ar";
@@ -164,6 +186,7 @@ export function WhyOpenSheet({ open, card, onClose, messages, locale }) {
   const title = isArabic && card.original ? card.original : card.title;
   const rights = card.object?.rights;
   const description = card.object?.content?.description || card.object?.content?.text;
+  const sourceUrl = card.object?.identity?.sourceRecordUrl || card.object?.identity?.originalSourceUrl || card.object?.canonicalUrl || card.downloadUrl;
 
   return (
     <Sheet open={open} title={messages.whyOpen} onClose={onClose}>
@@ -236,14 +259,14 @@ export function WhyOpenSheet({ open, card, onClose, messages, locale }) {
               <dd>{card.downloadRule}</dd>
             </div>
           </dl>
-          {card.downloadAllowed ? (
+          {card.downloadAllowed && sourceUrl ? (
             <a
-              href={card.downloadUrl}
+              href={sourceUrl}
               target="_blank"
               rel="noreferrer"
               className="rights-source-link"
             >
-              <ExternalLink size={16} aria-hidden="true" />
+              <Globe2 size={16} aria-hidden="true" />
               <span>{messages.openSourceFile}</span>
             </a>
           ) : null}
@@ -258,11 +281,29 @@ export function FocusedViewerModal({ open, card, mode = "image", onClose, messag
   const isArabic = locale === "ar";
   const title = isArabic && card.original ? card.original : card.title;
   const imageUrl = card.object?.media?.url || card.downloadUrl;
+  const content = card.object?.content || {};
+  const articleText = readerText(card);
+  const articleParagraphs = readerParagraphs(articleText);
+  const articleLead = content.description && content.description !== articleText ? content.description : articleParagraphs[0];
+  const articleSections = Array.isArray(content.sections) ? content.sections.filter((section) => section?.content) : [];
+  const articleImages = readerImages(card);
+  const sourceUrl = card.downloadUrl || card.object?.identity?.sourceRecordUrl || card.object?.canonicalUrl;
 
   return (
-    <dialog className="focused-modal" open aria-modal="true" aria-labelledby="focused-viewer-title">
-      <header className="focused-header">
-        <h2 id="focused-viewer-title" dir="auto">{title}</h2>
+    <dialog
+      className="focused-modal"
+      open
+      aria-modal="true"
+      aria-labelledby={mode === "reader" ? "focused-reader-title" : "focused-viewer-title"}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose();
+        }
+      }}
+    >
+      <header className={`focused-header ${mode === "reader" ? "focused-header--reader" : ""}`}>
+        {mode === "reader" ? <span className="sr-only">Reading mode</span> : <h2 id="focused-viewer-title" dir="auto">{title}</h2>}
         <button type="button" className="focused-close-btn" onClick={onClose} aria-label={messages.close}>
           <X size={22} aria-hidden="true" />
         </button>
@@ -289,20 +330,35 @@ export function FocusedViewerModal({ open, card, mode = "image", onClose, messag
               <span className="reader-source-tag">{card.source}</span>
               <span className="reader-license-tag">{card.license}</span>
             </div>
-            <h1 className="reader-title">{title}</h1>
-            <p className="reader-lead">
-              {card.object?.content?.description || "A foundational open cultural record from verified archives."}
-            </p>
+            <h1 id="focused-reader-title" className="reader-title">{title}</h1>
+            {articleLead ? <p className="reader-lead">{articleLead}</p> : null}
+            {articleImages.length ? (
+              <div className="reader-image-stack">
+                {articleImages.map((image, index) => (
+                  <figure className="reader-image-figure" key={image.url}>
+                    <img
+                      src={image.url}
+                      alt={image.altText || image.accessibility?.altText || title}
+                      className="reader-article-image"
+                      loading={index === 0 ? "eager" : "lazy"}
+                    />
+                    {image.caption ? <figcaption>{image.caption}</figcaption> : null}
+                  </figure>
+                ))}
+              </div>
+            ) : null}
             <div className="reader-body">
-              <p>
-                This artifact is preserved in the public knowledge commons. OpenScroll presents it directly from {card.source} without modification to its underlying provenance.
-              </p>
-              <p>
-                {card.attribution}
-              </p>
+              {articleSections.length ? articleSections.map((section, index) => (
+                <section className="reader-section" key={`${section.heading || "section"}-${index}`}>
+                  {section.heading ? <h2>{section.heading}</h2> : null}
+                  <p>{section.content}</p>
+                </section>
+              )) : articleParagraphs.slice(articleLead === articleParagraphs[0] ? 1 : 0).map((paragraph, index) => (
+                <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+              ))}
             </div>
             <div className="reader-footer">
-              <a href={card.downloadUrl} target="_blank" rel="noreferrer" className="rights-source-link">
+              <a href={sourceUrl} target="_blank" rel="noreferrer" className="rights-source-link">
                 <ExternalLink size={16} aria-hidden="true" />
                 <span>{messages.openSourceFile}</span>
               </a>

@@ -2,16 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bookmark,
-  BookmarkCheck,
   BookOpen,
   Compass,
   Database,
-  ExternalLink,
-  GitBranch,
   Globe2,
   Headphones,
-  HelpCircle,
   Info,
   Music,
   Pause,
@@ -23,7 +18,6 @@ import { IconButton } from "./primitives";
 
 export const MEDIA_STOP_EVENT = "openscroll:stop-media";
 export const MEDIA_AUTOPLAY_EVENT = "openscroll:autoplay-media";
-let mediaAudioUnlocked = false;
 
 function CardFrame({ className, children, showChrome, onToggleChrome }) {
 
@@ -51,25 +45,27 @@ function CardFrame({ className, children, showChrome, onToggleChrome }) {
   );
 }
 
-export function ActionRail({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages }) {
+export function sourceUrlForCard(card) {
+  return card?.object?.identity?.sourceRecordUrl || card?.object?.identity?.originalSourceUrl || card?.object?.canonicalUrl || card?.downloadUrl;
+}
+
+export function ActionRail({ card, onWhyOpen, messages }) {
+  const sourceUrl = sourceUrlForCard(card);
+
   return (
     <div className="card-rail" role="toolbar" aria-label="Card actions">
-      <IconButton
-        aria-pressed={saved}
-        label={saved ? messages.removeSave : messages.saveItem}
-        onClick={() => onToggleSave(card)}
-        className={saved ? "rail-btn--active" : ""}
-      >
-        {saved ? <BookmarkCheck className="icon-saved" aria-hidden="true" /> : <Bookmark aria-hidden="true" />}
-      </IconButton>
-
-      <IconButton label={messages.exploreBranch} onClick={() => onBranch(card)}>
-        <GitBranch aria-hidden="true" />
-      </IconButton>
-
-      <IconButton label={messages.whyThis} onClick={() => onWhyThis(card)}>
-        <HelpCircle aria-hidden="true" />
-      </IconButton>
+      {sourceUrl ? (
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="icon-control"
+          aria-label={messages.openSourceFile}
+          title={messages.openSourceFile}
+        >
+          <Globe2 aria-hidden="true" />
+        </a>
+      ) : null}
 
       <IconButton label={messages.whyOpen} onClick={() => onWhyOpen(card)}>
         <Info aria-hidden="true" />
@@ -124,6 +120,18 @@ export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
 function formatMediaTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return "--:--";
   return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+function articleText(card) {
+  const content = card.object?.content || {};
+  return content.text || content.sections?.map((section) => section.content).filter(Boolean).join("\n\n") || content.description || "Open knowledge overview and verified archival documentation.";
+}
+
+function articleExcerpt(text, maxLength = 460) {
+  const cleanText = text.replace(/\s+/g, " ").trim();
+  if (cleanText.length <= maxLength) return cleanText;
+  const boundary = cleanText.slice(0, maxLength).lastIndexOf(" ");
+  return `${cleanText.slice(0, boundary > 0 ? boundary : maxLength).trim()}…`;
 }
 
 export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale, showChrome, onToggleChrome }) {
@@ -213,7 +221,6 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
     if (!audio || mediaError) return;
 
     if (audio.paused) {
-      mediaAudioUnlocked = true;
       audio.muted = false;
       try {
         await audio.play();
@@ -345,12 +352,14 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
 
     const playIfVisible = async () => {
       if (!videoVisibleRef.current || mediaError) return;
-      video.muted = !mediaAudioUnlocked;
+      video.muted = false;
+      video.volume = 1;
       try {
         await video.play();
         if (!video.paused) setIsPlaying(true);
       } catch {
-        // Autoplay can still be rejected by browser policy or an unsupported codec.
+        // Keep the video paused when the browser blocks audible autoplay; never start it silently.
+        video.pause();
       }
     };
 
@@ -399,7 +408,6 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
     if (!video || mediaError) return;
 
     if (video.paused) {
-      mediaAudioUnlocked = true;
       video.muted = false;
       video.volume = 1;
       try {
@@ -412,7 +420,6 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
       }
     } else {
       if (video.muted) {
-        mediaAudioUnlocked = true;
         video.muted = false;
         video.volume = 1;
         try {
@@ -483,19 +490,18 @@ export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
   const isPrimarySource = card.object?.content?.type === "source-text";
+  const excerpt = articleExcerpt(articleText(card));
 
   return (
     <CardFrame className="feed-card--reader" showChrome={showChrome} onToggleChrome={onToggleChrome}>
       <div className="media-stage reader-stage">
         <div className="reader-excerpt-box">
+          <h2 className="reader-card-title" dir="auto">{displayTitle}</h2>
           {isPrimarySource ? (
             <span className="primary-source-tag">{messages.primarySource}</span>
           ) : null}
-          <div className="reader-icon-row" aria-hidden="true">
-            <BookOpen size={28} />
-          </div>
           <p className="reader-text" dir="auto">
-            {card.object?.content?.description || "Open knowledge overview and verified archival documentation."}
+            {excerpt}
           </p>
           <div className="reader-action-row">
             <button
@@ -523,10 +529,6 @@ export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
         onBranch={onBranch}
         messages={messages}
       />
-
-      <div className="feed-content">
-        <h2 dir="auto">{displayTitle}</h2>
-      </div>
     </CardFrame>
   );
 }
@@ -633,7 +635,10 @@ export function SessionBreathingCard({ exploredCount = 25, sourceCount = 6, onCo
 }
 
 export function UniversalCard(props) {
-  const kind = props.card.object?.media?.kind || props.card.object?.content?.type || "article";
+  const contentKind = props.card.object?.content?.type;
+  const mediaKind = props.card.object?.media?.kind;
+  const readerKinds = ["article", "reader", "source-text", "dictionary", "travel-guide", "text"];
+  const kind = readerKinds.includes(contentKind) ? "reader" : contentKind === "museum-object" || contentKind === "map" ? contentKind : mediaKind || contentKind || "article";
 
   switch (kind) {
     case "image":
@@ -647,9 +652,11 @@ export function UniversalCard(props) {
     case "map":
       return <MapCard {...props} />;
     case "article":
+    case "reader":
     case "source-text":
     case "dictionary":
     case "travel-guide":
+    case "text":
     default:
       return <ReaderCard {...props} />;
   }

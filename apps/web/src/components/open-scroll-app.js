@@ -23,7 +23,7 @@ import {
   canonicalMoroccoSample
 } from "@openscroll/content";
 import AppShell from "./app-shell";
-import { MEDIA_AUTOPLAY_EVENT, MEDIA_STOP_EVENT, UniversalCard, SessionBreathingCard } from "./media-cards";
+import { MEDIA_AUTOPLAY_EVENT, MEDIA_STOP_EVENT, UniversalCard, sourceUrlForCard } from "./media-cards";
 import {
   BranchExplorationSheet,
   FocusedViewerModal,
@@ -43,7 +43,6 @@ import {
   parseLocalImport,
   preferencesFromState,
   recordExplicitFeedback,
-  recordScrollCreation,
   requestLocalPersistence,
   resetLocalState,
   saveLocalData,
@@ -113,6 +112,7 @@ export default function OpenScrollApp() {
   const [feedExhausted, setFeedExhausted] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [feedMediaTypes, setFeedMediaTypes] = useState(MEDIA_TYPE_KEYS);
+  const [visibleCardId, setVisibleCardId] = useState(null);
   const [showCardChrome, setShowCardChrome] = useState(true);
   const feedRef = useRef(null);
   const bottomSentinelRef = useRef(null);
@@ -139,6 +139,24 @@ export default function OpenScrollApp() {
   }
 
   function handleFeedScroll() {
+    const feed = feedRef.current;
+    const feedCards = feed ? Array.from(feed.querySelectorAll(".feed-card")) : [];
+    if (feedCards.length) {
+      const feedCenter = feed.getBoundingClientRect().top + feed.clientHeight / 2;
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+      feedCards.forEach((node, index) => {
+        const rect = node.getBoundingClientRect();
+        const distance = Math.abs(rect.top + rect.height / 2 - feedCenter);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+      const visibleCard = cards[closestIndex];
+      if (visibleCard) setVisibleCardId((currentId) => currentId === visibleCard.id ? currentId : visibleCard.id);
+    }
+
     window.dispatchEvent(new Event(MEDIA_STOP_EVENT));
     window.clearTimeout(autoplayTimerRef.current);
     autoplayTimerRef.current = window.setTimeout(() => {
@@ -285,18 +303,10 @@ export default function OpenScrollApp() {
 
       const transformedCards = composedItems.map(transformUcoToCard);
       setCards(transformedCards);
+      setVisibleCardId(transformedCards[0]?.id || null);
       setFeedCursor(payload.data.pagination?.nextCursor ?? null);
       setFeedSourceOffsets(payload.data.sourceOffsets || {});
       setFeedExhausted(payload.data.sourceHasMore === false);
-
-      // 3. Save scroll to local state
-      commitState(
-        recordScrollCreation(localState, {
-          interest: cleanInterest,
-          topics: [cleanInterest]
-        }),
-        messages.saved
-      );
 
       setCurrentView("feed");
     } catch (error) {
@@ -458,16 +468,13 @@ export default function OpenScrollApp() {
   const storageCopy = storageStatus.availability === "ready" ? messages.ready : messages.limited;
   const storageUse = storageEstimate.percent === null ? formatBytes(storageEstimate.usage) : `${storageEstimate.percent}%`;
   const activeMediaTypes = MEDIA_TYPE_KEYS.filter((mediaType) => localState.settings.media[mediaType]);
+  const visibleCard = cards.find((card) => card.id === visibleCardId) || cards[0];
+  const feedSourceUrl = sourceUrlForCard(visibleCard);
 
   return (
     <AppShell
-      activeNav={currentView}
       feedMode={currentView === "feed"}
-      messages={messages}
-      onScrolls={() => setCurrentView("scrolls")}
       onExplore={() => setCurrentView("explore")}
-      onSaved={() => setCurrentView("saved")}
-      onSettings={() => setCurrentView("settings")}
       onBrandClick={() => setCurrentView("search")}
     >
       <main className={`journey ${isRtl ? "journey--rtl" : ""}`}>
@@ -531,9 +538,18 @@ export default function OpenScrollApp() {
                 <ArrowLeft className="directional-icon" aria-hidden="true" />
               </IconButton>
               <strong dir="auto">{interest}</strong>
-              <IconButton label={messages.details} onClick={() => setActiveModal("details")}>
-                <Globe2 aria-hidden="true" />
-              </IconButton>
+              {feedSourceUrl ? (
+                <a
+                  href={feedSourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="icon-control"
+                  aria-label={messages.openSourceFile}
+                  title={messages.openSourceFile}
+                >
+                  <Globe2 aria-hidden="true" />
+                </a>
+              ) : null}
             </header>
 
             {cards.map((card) => {

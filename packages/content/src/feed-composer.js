@@ -19,6 +19,8 @@ function shuffle(values, random) {
 }
 
 function mediaKind(item) {
+  const contentKind = item.content?.type;
+  if (["article", "reader", "source-text", "dictionary", "travel-guide", "text"].includes(contentKind)) return "text";
   return item.media?.kind || item.content?.type || "unknown";
 }
 
@@ -202,6 +204,6 @@ export function composeDiversityFeed(candidates, options = {}) {
       nextCursor
     },
     sourcesRepresented: unique(pageItems.map((item) => item.source?.name || item.source?.id)),
-    mediaKindsRepresented: unique(pageItems.map((item) => item.media?.kind || item.content?.type))
+    mediaKindsRepresented: unique(pageItems.map(mediaKind))
   });
 }
