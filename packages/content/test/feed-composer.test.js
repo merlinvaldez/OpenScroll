@@ -51,3 +51,36 @@ test("feed order is randomized but stable for a scroll seed", () => {
   assert.deepEqual(repeated, first, "the same scroll seed must preserve pagination order");
   assert.notDeepEqual(differentSeed, first, "different scroll seeds must produce a different exploration order");
 });
+
+test("feed interleaves available media kinds before filling the dominant kind", () => {
+  const candidates = [
+    ...Array.from({ length: 4 }, (_, index) => ({
+      id: `image-${index}`,
+      content: { title: `Image ${index}` },
+      media: { kind: "image", url: `https://example.org/image-${index}.jpg` },
+      source: { id: `image-source-${index}` },
+      rights: { eligibility: "eligible" }
+    })),
+    ...Array.from({ length: 2 }, (_, index) => ({
+      id: `audio-${index}`,
+      content: { title: `Audio ${index}` },
+      media: { kind: "audio", url: `https://example.org/audio-${index}.ogg` },
+      source: { id: `audio-source-${index}` },
+      rights: { eligibility: "eligible" }
+    })),
+    ...Array.from({ length: 2 }, (_, index) => ({
+      id: `video-${index}`,
+      content: { title: `Video ${index}` },
+      media: { kind: "video", url: `https://example.org/video-${index}.webm` },
+      source: { id: `video-source-${index}` },
+      rights: { eligibility: "eligible" }
+    }))
+  ];
+
+  const kinds = composeDiversityFeed(candidates, { pageSize: 8, seed: 2468 }).items.map((item) => item.media.kind);
+
+  assert.deepEqual(new Set(kinds.slice(0, 6)), new Set(["image", "audio", "video"]));
+  for (let index = 1; index < 6; index += 1) {
+    assert.notEqual(kinds[index], kinds[index - 1], "available media kinds should be interleaved");
+  }
+});

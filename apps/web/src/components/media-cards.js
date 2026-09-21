@@ -21,6 +21,10 @@ import {
 } from "lucide-react";
 import { IconButton } from "./primitives";
 
+export const MEDIA_STOP_EVENT = "openscroll:stop-media";
+export const MEDIA_AUTOPLAY_EVENT = "openscroll:autoplay-media";
+let mediaAudioUnlocked = false;
+
 function CardFrame({ className, children, showChrome, onToggleChrome }) {
 
   function toggleChrome(event) {
@@ -117,38 +121,161 @@ export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
   );
 }
 
+function formatMediaTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "--:--";
+  return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+}
+
 export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale, showChrome, onToggleChrome }) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [mediaError, setMediaError] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(card.object?.media?.durationSeconds || 0);
   const audioRef = useRef(null);
+  const audioVisibleRef = useRef(false);
+  const media = card.object?.media || {};
+  const audioUrl = media.url || card.downloadUrl;
+  const thumbnailUrl = media.thumbnailUrl;
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
-  const duration = card.object?.media?.durationSeconds || 96;
 
-  function togglePlay() {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
+  useEffect(() => {
+    setIsPlaying(false);
+    setMediaError(false);
+    setThumbnailFailed(false);
+    setCurrentTime(0);
+    setDuration(media.durationSeconds || 0);
+    return () => audioRef.current?.pause();
+  }, [audioUrl, media.durationSeconds]);
+
+  useEffect(() => {
+    function stopPlayback() {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.pause();
+      audio.currentTime = 0;
       setIsPlaying(false);
+      setCurrentTime(0);
+    }
+
+    window.addEventListener(MEDIA_STOP_EVENT, stopPlayback);
+    return () => window.removeEventListener(MEDIA_STOP_EVENT, stopPlayback);
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    const cardElement = audio?.closest(".feed-card");
+    const feedElement = cardElement?.closest(".feed");
+    if (!audio || !cardElement || !feedElement || typeof IntersectionObserver === "undefined") return undefined;
+
+    const playIfVisible = async () => {
+      if (!audioVisibleRef.current || mediaError) return;
+      audio.muted = false;
+      try {
+        await audio.play();
+        if (!audio.paused) setIsPlaying(true);
+      } catch {
+        // Browsers may require a user gesture before allowing audible autoplay.
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.65;
+        audioVisibleRef.current = isVisible;
+
+        if (isVisible) {
+          playIfVisible();
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+          setIsPlaying(false);
+          setCurrentTime(0);
+        }
+      },
+      { root: feedElement, threshold: [0, 0.65] }
+    );
+
+    window.addEventListener(MEDIA_AUTOPLAY_EVENT, playIfVisible);
+    observer.observe(cardElement);
+
+    return () => {
+      window.removeEventListener(MEDIA_AUTOPLAY_EVENT, playIfVisible);
+      observer.disconnect();
+      audioVisibleRef.current = false;
+    };
+  }, [audioUrl, mediaError]);
+
+  async function togglePlay(event) {
+    event?.stopPropagation();
+    const audio = audioRef.current;
+    if (!audio || mediaError) return;
+
+    if (audio.paused) {
+      mediaAudioUnlocked = true;
+      audio.muted = false;
+      try {
+        await audio.play();
+        onToggleChrome();
+      } catch {
+        setMediaError(true);
+        setIsPlaying(false);
+      }
     } else {
-      audioRef.current.play().catch(() => {
-        // Fallback for simulated playback
-        setIsPlaying(true);
-      });
-      setIsPlaying(true);
+      audio.pause();
+      onToggleChrome();
     }
   }
 
   return (
     <CardFrame className="feed-card--audio" showChrome={showChrome} onToggleChrome={onToggleChrome}>
       <div className="media-stage audio-stage">
-        <div className="audio-visualizer" aria-hidden="true">
-          <div className={`waveform ${isPlaying ? "waveform--active" : ""}`}>
-            {[40, 65, 30, 85, 95, 45, 70, 60, 90, 40, 75, 55, 80, 100, 50, 70, 35, 85, 60, 45].map((h, i) => (
-              <span key={i} style={{ height: `${h}%`, animationDelay: `${i * 0.05}s` }} />
-            ))}
+        <button
+          type="button"
+          className={`audio-artwork ${thumbnailUrl && !thumbnailFailed ? "" : "audio-artwork--fallback"}`}
+          onClick={togglePlay}
+          aria-label={isPlaying ? messages.pauseAudio : messages.playAudio}
+        >
+          {thumbnailUrl && !thumbnailFailed ? (
+            <img
+              className="audio-thumbnail"
+              src={thumbnailUrl}
+              alt=""
+              loading="lazy"
+              onError={() => setThumbnailFailed(true)}
+            />
+          ) : (
+            <Music className="audio-fallback-icon" size={48} aria-hidden="true" />
+          )}
+          <div className={`audio-visualizer ${thumbnailUrl && !thumbnailFailed ? "audio-visualizer--overlay" : ""}`} aria-hidden="true">
+            <div className={`waveform ${isPlaying ? "waveform--active" : ""}`}>
+              {[40, 65, 30, 85, 95, 45, 70, 60, 90, 40, 75, 55, 80, 100, 50, 70, 35, 85, 60, 45].map((h, i) => (
+                <span key={i} style={{ height: `${h}%`, animationDelay: `${i * 0.05}s` }} />
+              ))}
+            </div>
           </div>
-        </div>
+        </button>
+
+        <audio
+          ref={audioRef}
+          className="media-audio"
+          src={audioUrl || undefined}
+          preload="metadata"
+          aria-hidden="true"
+          onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => {
+            setIsPlaying(false);
+            setCurrentTime(0);
+          }}
+          onError={() => {
+            setMediaError(true);
+            setIsPlaying(false);
+          }}
+        />
 
         <div className="audio-transport">
           <button
@@ -160,8 +287,8 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
             {isPlaying ? <Pause size={28} aria-hidden="true" /> : <Play size={28} aria-hidden="true" />}
           </button>
           <div className="transport-info">
-            <span className="audio-time">{Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, "0")}</span>
-            <span className="audio-badge">{messages.playAudio}</span>
+            <span className="audio-time">{formatMediaTime(currentTime)} / {formatMediaTime(duration)}</span>
+            <span className="audio-badge">{mediaError ? messages.mediaUnavailable : messages.playAudio}</span>
           </div>
           {card.object?.media?.accessibility?.transcript ? (
             <button
@@ -175,6 +302,164 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
             </button>
           ) : null}
         </div>
+      </div>
+
+      <ActionRail
+        card={card}
+        saved={saved}
+        onToggleSave={onToggleSave}
+        onWhyThis={onWhyThis}
+        onWhyOpen={onWhyOpen}
+        onBranch={onBranch}
+        messages={messages}
+      />
+
+      <div className="feed-content">
+        <h2 dir="auto">{displayTitle}</h2>
+      </div>
+    </CardFrame>
+  );
+}
+
+export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
+  const videoRef = useRef(null);
+  const videoVisibleRef = useRef(false);
+  const media = card.object?.media || {};
+  const videoUrl = media.url || card.downloadUrl;
+  const thumbnailUrl = media.thumbnailUrl;
+  const isArabic = locale === "ar";
+  const displayTitle = isArabic && card.original ? card.original : card.title;
+
+  useEffect(() => {
+    setIsPlaying(false);
+    setMediaError(false);
+    videoVisibleRef.current = false;
+    return () => videoRef.current?.pause();
+  }, [videoUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || typeof IntersectionObserver === "undefined") return undefined;
+
+    const playIfVisible = async () => {
+      if (!videoVisibleRef.current || mediaError) return;
+      video.muted = !mediaAudioUnlocked;
+      try {
+        await video.play();
+        if (!video.paused) setIsPlaying(true);
+      } catch {
+        // Autoplay can still be rejected by browser policy or an unsupported codec.
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.65;
+        videoVisibleRef.current = isVisible;
+
+        if (isVisible) {
+          playIfVisible();
+        } else {
+          video.pause();
+          video.currentTime = 0;
+          setIsPlaying(false);
+        }
+      },
+      { root: video.closest(".feed"), threshold: [0, 0.65] }
+    );
+
+    window.addEventListener(MEDIA_AUTOPLAY_EVENT, playIfVisible);
+    observer.observe(video);
+
+    return () => {
+      window.removeEventListener(MEDIA_AUTOPLAY_EVENT, playIfVisible);
+      observer.disconnect();
+      videoVisibleRef.current = false;
+    };
+  }, [videoUrl, mediaError]);
+
+  useEffect(() => {
+    function stopPlayback() {
+      const video = videoRef.current;
+      if (!video) return;
+      video.pause();
+      video.currentTime = 0;
+      setIsPlaying(false);
+    }
+
+    window.addEventListener(MEDIA_STOP_EVENT, stopPlayback);
+    return () => window.removeEventListener(MEDIA_STOP_EVENT, stopPlayback);
+  }, []);
+
+  async function togglePlay(event) {
+    event?.stopPropagation();
+    const video = videoRef.current;
+    if (!video || mediaError) return;
+
+    if (video.paused) {
+      mediaAudioUnlocked = true;
+      video.muted = false;
+      video.volume = 1;
+      try {
+        await video.play();
+        if (!video.paused) setIsPlaying(true);
+        onToggleChrome();
+      } catch {
+        setMediaError(true);
+        setIsPlaying(false);
+      }
+    } else {
+      if (video.muted) {
+        mediaAudioUnlocked = true;
+        video.muted = false;
+        video.volume = 1;
+        try {
+          await video.play();
+          if (!video.paused) setIsPlaying(true);
+        } catch {
+          // A user gesture normally unlocks audio; keep the media state recoverable if it does not.
+        }
+        onToggleChrome();
+        return;
+      }
+      video.pause();
+      onToggleChrome();
+    }
+  }
+
+  return (
+    <CardFrame className={`feed-card--video ${isPlaying ? "feed-card--playing" : ""}`} showChrome={showChrome} onToggleChrome={onToggleChrome}>
+      <div className="media-stage video-stage">
+        <video
+          ref={videoRef}
+          className="stage-video"
+          src={videoUrl || undefined}
+          poster={thumbnailUrl || undefined}
+          preload="metadata"
+          playsInline
+          onClick={togglePlay}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+          onError={() => {
+            setMediaError(true);
+            setIsPlaying(false);
+          }}
+        />
+        {!isPlaying ? (
+          <button
+            type="button"
+            className="video-play-btn"
+            onClick={togglePlay}
+            aria-label={messages.playVideo}
+            disabled={mediaError}
+          >
+            <Play size={28} aria-hidden="true" />
+          </button>
+        ) : null}
+        {mediaError ? <p className="media-error">{messages.mediaUnavailable}</p> : null}
       </div>
 
       <ActionRail
@@ -355,6 +640,8 @@ export function UniversalCard(props) {
       return <ImageCard {...props} />;
     case "audio":
       return <AudioCard {...props} />;
+    case "video":
+      return <VideoCard {...props} />;
     case "museum-object":
       return <MuseumCard {...props} />;
     case "map":

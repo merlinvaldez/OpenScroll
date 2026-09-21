@@ -77,3 +77,78 @@ test("queryLiveConnectors can fetch exactly five Commons results without fixture
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Commons media classification uses MIME types and requests thumbnails", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const mediaCases = [
+    { extension: "ogg", mime: "application/ogg", mediatype: "VIDEO", kind: "video" },
+    { extension: "ogg", mime: "audio/ogg", kind: "audio" },
+    { extension: "mid", mime: "audio/midi", kind: "audio" },
+    { extension: "mpeg", mime: "video/mpeg", kind: "video" },
+    { extension: "txt", mime: "text/plain", mediatype: "TEXT", kind: "text" },
+    { extension: "zip", mime: "application/zip", mediatype: "ARCHIVE", kind: "data" }
+  ];
+
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    const pages = Object.fromEntries(mediaCases.map((item, index) => [String(index + 1), {
+      pageid: index + 1,
+      title: `File:Topic result ${index + 1}.${item.extension}`,
+      imageinfo: [{
+        url: `https://upload.wikimedia.org/topic-${index + 1}.${item.extension}`,
+        thumburl: `https://upload.wikimedia.org/topic-${index + 1}-thumb.jpg`,
+        descriptionurl: `https://commons.wikimedia.org/wiki/File:Topic_result_${index + 1}`,
+        width: 1200,
+        height: 800,
+        mime: item.mime,
+        mediatype: item.mediatype,
+        extmetadata: {
+          LicenseShortName: { value: "CC BY 4.0" },
+          Artist: { value: "OpenScroll test" },
+          ImageDescription: { value: "A test media result" }
+        }
+      }]
+    }]));
+
+    return { ok: true, json: async () => ({ query: { pages } }) };
+  };
+
+  try {
+    const items = await searchCommonsLive("Generated media", 4);
+    assert.deepEqual(items.map((item) => item.media.kind), mediaCases.map((item) => item.kind));
+    assert.ok(items.every((item) => item.media.thumbnailUrl?.endsWith("-thumb.jpg")));
+    assert.match(calls[0], /iiurlwidth=640/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Commons media searches add a type-specific file filter", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    return { ok: true, json: async () => ({ query: { pages: {} } }) };
+  };
+
+  try {
+    await Promise.all([
+      searchCommonsLive("Generated media", 2, { mediaType: "image" }),
+      searchCommonsLive("Generated media", 2, { mediaType: "audio" }),
+      searchCommonsLive("Generated media", 2, { mediaType: "video" }),
+      searchCommonsLive("Generated media", 2, { mediaType: "text" }),
+      searchCommonsLive("Generated media", 2, { mediaType: "data" })
+    ]);
+
+    const decodedCalls = calls.map((url) => decodeURIComponent(url));
+    assert.equal(decodedCalls.length, 5);
+    assert.ok(decodedCalls.some((url) => url.includes("filetype:bitmap")));
+    assert.ok(decodedCalls.some((url) => url.includes("filetype:audio")));
+    assert.ok(decodedCalls.some((url) => url.includes("filetype:video")));
+    assert.ok(decodedCalls.some((url) => url.includes("filetype:text")));
+    assert.ok(decodedCalls.some((url) => url.includes("filetype:office OR filetype:archive OR filetype:3d")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

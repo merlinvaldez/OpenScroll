@@ -114,11 +114,45 @@ export async function searchWikipediaLive(query, limit = 8) {
 // ---------------------------------------------------------------------------
 // 2. LIVE WIKIMEDIA COMMONS CONNECTOR (Images, Audio, Historical media)
 // ---------------------------------------------------------------------------
+const COMMONS_MEDIA_TYPE_FILTERS = Object.freeze({
+  image: "filetype:bitmap",
+  audio: "filetype:audio",
+  video: "filetype:video",
+  text: "filetype:text",
+  data: "(filetype:office OR filetype:archive OR filetype:3d)"
+});
+
+function classifyCommonsMediaKind(mime = "", mediaUrl = "", mediatype = "") {
+  const normalizedMime = mime.toLowerCase();
+  const normalizedUrl = mediaUrl.toLowerCase().split("?")[0];
+  const normalizedMediatype = mediatype.toUpperCase();
+
+  // Commons' media type and MIME are authoritative when provided. This
+  // matters for .ogg, which can contain either audio or Ogg/Theora video.
+  if (normalizedMediatype === "AUDIO") return "audio";
+  if (normalizedMediatype === "VIDEO") return "video";
+  if (normalizedMediatype === "TEXT") return "text";
+  if (["OFFICE", "ARCHIVE", "3D"].includes(normalizedMediatype)) return "data";
+  if (normalizedMime.startsWith("audio/")) return "audio";
+  if (normalizedMime.startsWith("video/")) return "video";
+
+  if ([".mp3", ".ogg", ".oga", ".opus", ".flac", ".wav", ".wave", ".mid", ".midi"].some((extension) => normalizedUrl.endsWith(extension))) {
+    return "audio";
+  }
+  if ([".webm", ".ogv", ".mpeg", ".mpg", ".mpe", ".mp4"].some((extension) => normalizedUrl.endsWith(extension))) {
+    return "video";
+  }
+
+  return "image";
+}
+
 export async function searchCommonsLive(query, limit = 12, options = {}) {
-  const cleanQ = encodeURIComponent(cleanString(query, 100));
+  const mediaTypeFilter = COMMONS_MEDIA_TYPE_FILTERS[options.mediaType] || "";
+  const searchQuery = [cleanString(query, 100), mediaTypeFilter].filter(Boolean).join(" ");
+  const cleanQ = encodeURIComponent(searchQuery);
   const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
   const offsetQuery = offset ? `&gsroffset=${offset}` : "";
-  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime&format=json&origin=*`;
+  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiurlwidth=640&format=json&origin=*`;
 
   const data = await safeFetch(url);
   if (!data?.query?.pages) return [];
@@ -134,9 +168,8 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
     const desc = cleanString(meta.ImageDescription?.value?.replace(/<[^>]*>/g, "") || page.title.replace(/^File:/, ""), 240);
     const mime = info.mime || "";
 
-    let kind = "image";
-    if (mime.startsWith("audio/") || info.url.endsWith(".ogg") || info.url.endsWith(".mp3")) kind = "audio";
-    else if (mime.startsWith("video/") || info.url.endsWith(".webm") || info.url.endsWith(".mp4")) kind = "video";
+    const kind = classifyCommonsMediaKind(mime, info.url, info.mediatype);
+    if (options.mediaType && kind !== options.mediaType) continue;
 
     const title = page.title.replace(/^File:/, "").replace(/\.[^/.]+$/, "").replace(/_/g, " ");
 
@@ -159,7 +192,7 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
       media: {
         kind,
         url: info.url,
-        thumbnailUrl: info.thumburl || info.url,
+        thumbnailUrl: info.thumburl || null,
         width: info.width || 1200,
         height: info.height || 800,
         mime,
@@ -286,7 +319,7 @@ export async function queryLiveConnectors(query, options = {}) {
     requests.push(searchWikipediaLive(query, explicitLimit ?? 6).catch(() => []));
   }
   if (sources.includes("wikimedia-commons")) {
-    requests.push(searchCommonsLive(query, explicitLimit ?? 12, { offset: options.offset }).catch(() => []));
+    requests.push(searchCommonsLive(query, explicitLimit ?? 12, { offset: options.offset, mediaType: options.mediaType }).catch(() => []));
   }
   if (sources.includes("met")) {
     requests.push(searchMetMuseumLive(query, explicitLimit ?? 6).catch(() => []));

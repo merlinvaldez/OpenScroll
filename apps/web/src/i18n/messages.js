@@ -28,6 +28,7 @@ export const messages = {
     increaseWeight: "More weight",
     decreaseWeight: "Less weight",
     pinnedTopics: "Selected directions",
+    mediaSelectionRequired: "Select at least one media type.",
 
     // Feed & Media Actions
     details: "Feed details",
@@ -57,6 +58,9 @@ export const messages = {
     zoomImage: "Zoom artifact",
     playAudio: "Play recording",
     pauseAudio: "Pause recording",
+    playVideo: "Play video",
+    pauseVideo: "Pause video",
+    mediaUnavailable: "Media unavailable",
     transcript: "Transcript",
     captions: "Captions",
     readArticle: "Read full piece",
@@ -160,6 +164,7 @@ export const messages = {
     increaseWeight: "Más peso",
     decreaseWeight: "Menos peso",
     pinnedTopics: "Direcciones elegidas",
+    mediaSelectionRequired: "Selecciona al menos un tipo de medio.",
 
     details: "Detalles del feed",
     saveItem: "Guardar",
@@ -187,6 +192,9 @@ export const messages = {
     zoomImage: "Ampliar imagen",
     playAudio: "Reproducir audio",
     pauseAudio: "Pausar audio",
+    playVideo: "Reproducir video",
+    pauseVideo: "Pausar video",
+    mediaUnavailable: "Medio no disponible",
     transcript: "Transcripción",
     captions: "Subtítulos",
     readArticle: "Leer artículo",
@@ -285,6 +293,7 @@ export const messages = {
     increaseWeight: "زيادة الأهمية",
     decreaseWeight: "تقليل الأهمية",
     pinnedTopics: "المسارات المختارة",
+    mediaSelectionRequired: "اختر نوع وسائط واحدًا على الأقل.",
 
     details: "تفاصيل الخلاصة",
     saveItem: "حفظ",
@@ -312,6 +321,9 @@ export const messages = {
     zoomImage: "تكبير الصورة",
     playAudio: "تشغيل التسجيل",
     pauseAudio: "إيقاف التسجيل",
+    playVideo: "تشغيل الفيديو",
+    pauseVideo: "إيقاف الفيديو",
+    mediaUnavailable: "الوسائط غير متاحة",
     transcript: "النص الصوتي",
     captions: "الترجمة المرئية",
     readArticle: "قراءة النص كاملاً",

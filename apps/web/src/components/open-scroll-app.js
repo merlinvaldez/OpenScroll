@@ -1,24 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Download,
+  FileText,
   Eraser,
   FileInput,
   Globe2,
   HardDrive,
+  Image,
+  Database,
+  Music,
   RotateCcw,
   Search,
   SlidersHorizontal,
-  Sparkles
+  Sparkles,
+  Video
 } from "lucide-react";
 import {
   canonicalMoroccoSample
 } from "@openscroll/content";
 import AppShell from "./app-shell";
-import { UniversalCard, SessionBreathingCard } from "./media-cards";
+import { MEDIA_AUTOPLAY_EVENT, MEDIA_STOP_EVENT, UniversalCard, SessionBreathingCard } from "./media-cards";
 import {
   BranchExplorationSheet,
   FocusedViewerModal,
@@ -81,6 +86,8 @@ function transformUcoToCard(object) {
 const INITIAL_CARDS = canonicalMoroccoSample.map(transformUcoToCard);
 
 const MEDIA_LABELS = { images: "Images", audio: "Audio", video: "Video", text: "Text", data: "Data" };
+const MEDIA_ICONS = { images: Image, audio: Music, video: Video, text: FileText, data: Database };
+const MEDIA_TYPE_KEYS = Object.keys(MEDIA_LABELS);
 const SOURCE_LABELS = { wikimedia: "Wikimedia", openverse: "Openverse", smithsonian: "Smithsonian", europeana: "Europeana", dpla: "DPLA" };
 
 function formatBytes(value) {
@@ -105,9 +112,11 @@ export default function OpenScrollApp() {
   const [feedSourceOffsets, setFeedSourceOffsets] = useState({});
   const [feedExhausted, setFeedExhausted] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [feedMediaTypes, setFeedMediaTypes] = useState(MEDIA_TYPE_KEYS);
   const [showCardChrome, setShowCardChrome] = useState(true);
   const feedRef = useRef(null);
   const bottomSentinelRef = useRef(null);
+  const autoplayTimerRef = useRef(null);
 
   const [activeCard, setActiveCard] = useState(null);
   const [activeModal, setActiveModal] = useState(null); // "branch" | "whyThis" | "whyOpen" | "viewer" | "settings"
@@ -128,6 +137,15 @@ export default function OpenScrollApp() {
   function handleToggleCardChrome() {
     setShowCardChrome((visible) => !visible);
   }
+
+  function handleFeedScroll() {
+    window.dispatchEvent(new Event(MEDIA_STOP_EVENT));
+    window.clearTimeout(autoplayTimerRef.current);
+    autoplayTimerRef.current = window.setTimeout(() => {
+      window.dispatchEvent(new Event(MEDIA_AUTOPLAY_EVENT));
+    }, 180);
+  }
+
   const isRtl = directionFor(locale) === "rtl";
 
   function applyJourneyState(nextState) {
@@ -179,6 +197,7 @@ export default function OpenScrollApp() {
     document.documentElement.dataset.hydrated = "true";
     return () => {
       delete document.documentElement.dataset.hydrated;
+      window.clearTimeout(autoplayTimerRef.current);
     };
   }, []);
 
@@ -215,9 +234,14 @@ export default function OpenScrollApp() {
   async function handleBuildScroll(overrideInterest) {
     const isStringOverride = typeof overrideInterest === "string";
     const cleanInterest = (isStringOverride ? overrideInterest : interest).trim();
+    const selectedMediaTypes = MEDIA_TYPE_KEYS.filter((mediaType) => localState.settings.media[mediaType]);
 
     if (!cleanInterest) {
       setToast("Enter a search term to build a feed.");
+      return;
+    }
+    if (!selectedMediaTypes.length) {
+      setToast(messages.mediaSelectionRequired);
       return;
     }
 
@@ -225,6 +249,7 @@ export default function OpenScrollApp() {
     setIsLoadingFeed(true);
     setCurrentView("feed");
     setCards([]);
+    setFeedMediaTypes(selectedMediaTypes);
     setFeedSeed(nextSeed);
     setFeedCursor(null);
     setFeedSourceOffsets({});
@@ -238,7 +263,8 @@ export default function OpenScrollApp() {
           interest: cleanInterest,
           feedback: localState.feedback,
           pageSize: 25,
-          seed: nextSeed
+          seed: nextSeed,
+          mediaTypes: selectedMediaTypes
         })
       });
 
@@ -299,7 +325,8 @@ export default function OpenScrollApp() {
           cursor: nextCursor,
           pageSize: 25,
           seed: feedSeed,
-          sourceOffsets: feedSourceOffsets
+          sourceOffsets: feedSourceOffsets,
+          mediaTypes: feedMediaTypes
         })
       });
 
@@ -348,7 +375,7 @@ export default function OpenScrollApp() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [currentView, feedCursor, feedSeed, feedSourceOffsets, feedExhausted, isLoadingFeed, isLoadingMore, interest]);
+  }, [currentView, feedCursor, feedSeed, feedSourceOffsets, feedExhausted, feedMediaTypes, isLoadingFeed, isLoadingMore, interest]);
 
   function handleToggleSave(card) {
     const wasSaved = localState.saves.some((save) => save.itemId === card.id);
@@ -430,6 +457,7 @@ export default function OpenScrollApp() {
 
   const storageCopy = storageStatus.availability === "ready" ? messages.ready : messages.limited;
   const storageUse = storageEstimate.percent === null ? formatBytes(storageEstimate.usage) : `${storageEstimate.percent}%`;
+  const activeMediaTypes = MEDIA_TYPE_KEYS.filter((mediaType) => localState.settings.media[mediaType]);
 
   return (
     <AppShell
@@ -465,12 +493,28 @@ export default function OpenScrollApp() {
               <IconButton
                 className="submit-control"
                 type="submit"
-                disabled={!interest.trim()}
+                disabled={!interest.trim() || !activeMediaTypes.length}
                 label={messages.continue}
               >
                 <ArrowRight className="directional-icon" aria-hidden="true" />
               </IconButton>
             </form>
+            <section className="opening-media-filters" aria-labelledby="media-filter-title">
+              <h2 id="media-filter-title">{messages.media}</h2>
+              <div className="toggle-grid">
+                {Object.entries(MEDIA_LABELS).map(([key, label]) => (
+                  <label className="toggle-pill toggle-pill--icon" key={key} title={label}>
+                    <input
+                      type="checkbox"
+                      aria-label={label}
+                      checked={localState.settings.media[key]}
+                      onChange={() => changeSettings({ media: { [key]: !localState.settings.media[key] } }, "")}
+                    />
+                    <span aria-hidden="true">{createElement(MEDIA_ICONS[key], { size: 21, strokeWidth: 1.8 })}</span>
+                  </label>
+                ))}
+              </div>
+            </section>
           </section>
         ) : null}
 
@@ -480,6 +524,7 @@ export default function OpenScrollApp() {
             ref={feedRef}
             className={`feed ${isLoadingFeed || isLoadingMore ? "feed--loading" : ""}`}
             aria-label={`${interest} stream`}
+            onScroll={handleFeedScroll}
           >
             <header className="feed-header">
               <IconButton label={messages.back} onClick={() => setCurrentView("search")}>
@@ -621,13 +666,14 @@ export default function OpenScrollApp() {
               <h3>{messages.media}</h3>
               <div className="toggle-grid">
                 {Object.entries(MEDIA_LABELS).map(([key, label]) => (
-                  <label className="toggle-pill" key={key}>
+                  <label className="toggle-pill toggle-pill--icon" key={key} title={label}>
                     <input
                       type="checkbox"
+                      aria-label={label}
                       checked={localState.settings.media[key]}
                       onChange={() => changeSettings({ media: { [key]: !localState.settings.media[key] } })}
                     />
-                    <span>{label}</span>
+                    <span aria-hidden="true">{createElement(MEDIA_ICONS[key], { size: 21, strokeWidth: 1.8 })}</span>
                   </label>
                 ))}
               </div>

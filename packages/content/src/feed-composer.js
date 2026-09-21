@@ -18,6 +18,36 @@ function shuffle(values, random) {
   return shuffled;
 }
 
+function mediaKind(item) {
+  return item.media?.kind || item.content?.type || "unknown";
+}
+
+function interleaveMediaKinds(items, random) {
+  const buckets = new Map();
+
+  for (const item of items) {
+    const kind = mediaKind(item);
+    if (!buckets.has(kind)) buckets.set(kind, []);
+    buckets.get(kind).push(item);
+  }
+
+  const mediaOrder = shuffle([...buckets.keys()], random);
+  const mixed = [];
+  let remaining = true;
+
+  while (remaining) {
+    remaining = false;
+    for (const kind of mediaOrder) {
+      const bucket = buckets.get(kind);
+      if (!bucket?.length) continue;
+      mixed.push(bucket.shift());
+      remaining = true;
+    }
+  }
+
+  return mixed;
+}
+
 export function deduplicateCandidates(candidates) {
   const clusters = new Map();
 
@@ -117,7 +147,8 @@ export function composeDiversityFeed(candidates, options = {}) {
     .filter((entry) => entry.score > 0);
 
   // 4. Shuffle for open exploration, then keep the existing diversity guardrails.
-  const pool = shuffle(scored.map((entry) => entry.item), seededRandom(seed));
+  const random = seededRandom(seed);
+  const pool = interleaveMediaKinds(shuffle(scored.map((entry) => entry.item), random), random);
   const composed = [];
   const remaining = [...pool];
 
