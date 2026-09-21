@@ -13,7 +13,6 @@ import {
   Headphones,
   HelpCircle,
   Info,
-  Maximize2,
   Music,
   Pause,
   Play,
@@ -21,6 +20,32 @@ import {
   Volume2
 } from "lucide-react";
 import { IconButton } from "./primitives";
+
+function CardFrame({ className, children, showChrome, onToggleChrome }) {
+
+  function toggleChrome(event) {
+    if (event.target.closest("button, a, input, select, textarea, summary")) return;
+    onToggleChrome();
+  }
+
+  function handleKeyDown(event) {
+    if (event.target.closest("button, a, input, select, textarea, summary")) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onToggleChrome();
+  }
+
+  return (
+    <article
+      className={`feed-card ${className} ${showChrome ? "" : "feed-card--chrome-hidden"}`}
+      tabIndex="0"
+      onClick={toggleChrome}
+      onKeyDown={handleKeyDown}
+    >
+      {children}
+    </article>
+  );
+}
 
 export function ActionRail({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages }) {
   return (
@@ -49,45 +74,14 @@ export function ActionRail({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
   );
 }
 
-export function MetadataRow({ card, messages, locale }) {
-  return (
-    <div className="meta-row">
-      {card.topic ? (
-        <>
-          <span className="mindmap-topic-badge" title={`Semantic match: ${card.topic}`}>
-            ✦ {card.topic}
-          </span>
-          <span className="meta-separator" aria-hidden="true">•</span>
-        </>
-      ) : null}
-      <span className="meta-source" title={card.source}>
-        <span className="sr-only">{messages.source}: </span>
-        {card.source}
-      </span>
-      <span className="meta-separator" aria-hidden="true">•</span>
-      <span className="meta-license" title={card.license}>
-        {card.license}
-      </span>
-      {card.creator ? (
-        <>
-          <span className="meta-separator" aria-hidden="true">•</span>
-          <span className="meta-creator" title={card.creator}>
-            {card.creator}
-          </span>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale }) {
+export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
   const imageUrl = card.object?.media?.url || card.downloadUrl;
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
 
   return (
-    <article className="feed-card feed-card--image" tabIndex="0">
-      <div className="media-stage image-stage" onClick={() => onOpenViewer(card, "image")}>
+    <CardFrame className="feed-card--image" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+      <div className="media-stage image-stage">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -104,17 +98,6 @@ export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
           <Globe2 className="fallback-icon" aria-hidden="true" />
           <span>{card.topic}</span>
         </div>
-        <button
-          type="button"
-          className="stage-zoom-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenViewer(card, "image");
-          }}
-          aria-label={messages.zoomImage}
-        >
-          <Maximize2 size={18} aria-hidden="true" />
-        </button>
       </div>
 
       <ActionRail
@@ -128,19 +111,13 @@ export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
       />
 
       <div className="feed-content">
-        <MetadataRow card={card} messages={messages} locale={locale} />
         <h2 dir="auto">{displayTitle}</h2>
-        {card.object?.content?.description ? (
-          <p className="feed-description" dir="auto">
-            {card.object.content.description}
-          </p>
-        ) : null}
       </div>
-    </article>
+    </CardFrame>
   );
 }
 
-export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale }) {
+export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale, showChrome, onToggleChrome }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const audioRef = useRef(null);
@@ -163,7 +140,7 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
   }
 
   return (
-    <article className="feed-card feed-card--audio" tabIndex="0">
+    <CardFrame className="feed-card--audio" showChrome={showChrome} onToggleChrome={onToggleChrome}>
       <div className="media-stage audio-stage">
         <div className="audio-visualizer" aria-hidden="true">
           <div className={`waveform ${isPlaying ? "waveform--active" : ""}`}>
@@ -211,26 +188,20 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
       />
 
       <div className="feed-content">
-        <MetadataRow card={card} messages={messages} locale={locale} />
         <h2 dir="auto">{displayTitle}</h2>
-        {card.object?.content?.description ? (
-          <p className="feed-description" dir="auto">
-            {card.object.content.description}
-          </p>
-        ) : null}
       </div>
-    </article>
+    </CardFrame>
   );
 }
 
-export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale }) {
+export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale, showChrome, onToggleChrome }) {
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
   const isPrimarySource = card.object?.content?.type === "source-text";
 
   return (
-    <article className="feed-card feed-card--reader" tabIndex="0">
-      <div className="media-stage reader-stage" onClick={() => onOpenViewer(card, "reader")}>
+    <CardFrame className="feed-card--reader" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+      <div className="media-stage reader-stage">
         <div className="reader-excerpt-box">
           {isPrimarySource ? (
             <span className="primary-source-tag">{messages.primarySource}</span>
@@ -269,21 +240,20 @@ export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
       />
 
       <div className="feed-content">
-        <MetadataRow card={card} messages={messages} locale={locale} />
         <h2 dir="auto">{displayTitle}</h2>
       </div>
-    </article>
+    </CardFrame>
   );
 }
 
-export function MapCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale }) {
+export function MapCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
   const place = card.object?.geography?.places?.[0]?.label || "Morocco";
 
   return (
-    <article className="feed-card feed-card--map" tabIndex="0">
-      <div className="media-stage map-stage" onClick={() => onOpenViewer(card, "map")}>
+    <CardFrame className="feed-card--map" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+      <div className="media-stage map-stage">
         <div className="map-mock-canvas">
           <div className="map-grid-lines" aria-hidden="true" />
           <div className="map-pin">
@@ -291,17 +261,6 @@ export function MapCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBra
             <span className="pin-label">{place}</span>
           </div>
         </div>
-        <button
-          type="button"
-          className="stage-zoom-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenViewer(card, "map");
-          }}
-          aria-label={messages.exploreMap}
-        >
-          <Maximize2 size={18} aria-hidden="true" />
-        </button>
       </div>
 
       <ActionRail
@@ -315,26 +274,20 @@ export function MapCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBra
       />
 
       <div className="feed-content">
-        <MetadataRow card={card} messages={messages} locale={locale} />
         <h2 dir="auto">{displayTitle}</h2>
-        {card.object?.content?.description ? (
-          <p className="feed-description" dir="auto">
-            {card.object.content.description}
-          </p>
-        ) : null}
       </div>
-    </article>
+    </CardFrame>
   );
 }
 
-export function MuseumCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, onOpenViewer, messages, locale }) {
+export function MuseumCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
   const imageUrl = card.object?.media?.url || card.downloadUrl;
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
 
   return (
-    <article className="feed-card feed-card--museum" tabIndex="0">
-      <div className="media-stage museum-stage" onClick={() => onOpenViewer(card, "museum")}>
+    <CardFrame className="feed-card--museum" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+      <div className="media-stage museum-stage">
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -363,21 +316,15 @@ export function MuseumCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
       />
 
       <div className="feed-content">
-        <MetadataRow card={card} messages={messages} locale={locale} />
         <h2 dir="auto">{displayTitle}</h2>
-        {card.object?.content?.description ? (
-          <p className="feed-description" dir="auto">
-            {card.object.content.description}
-          </p>
-        ) : null}
       </div>
-    </article>
+    </CardFrame>
   );
 }
 
-export function SessionBreathingCard({ exploredCount = 25, sourceCount = 6, onContinue, onPause, messages }) {
+export function SessionBreathingCard({ exploredCount = 25, sourceCount = 6, onContinue, onPause, messages, showChrome, onToggleChrome }) {
   return (
-    <article className="feed-card feed-card--breathing" tabIndex="0">
+    <CardFrame className="feed-card--breathing" showChrome={showChrome} onToggleChrome={onToggleChrome}>
       <div className="breathing-stage">
         <div className="breathing-circle" aria-hidden="true" />
         <div className="breathing-content">
@@ -396,7 +343,7 @@ export function SessionBreathingCard({ exploredCount = 25, sourceCount = 6, onCo
           </div>
         </div>
       </div>
-    </article>
+    </CardFrame>
   );
 }
 

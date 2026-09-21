@@ -105,6 +105,8 @@ export default function OpenScrollApp() {
   const [feedSourceOffsets, setFeedSourceOffsets] = useState({});
   const [feedExhausted, setFeedExhausted] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [showCardChrome, setShowCardChrome] = useState(true);
+  const feedRef = useRef(null);
   const bottomSentinelRef = useRef(null);
 
   const [activeCard, setActiveCard] = useState(null);
@@ -122,6 +124,10 @@ export default function OpenScrollApp() {
   const interestInput = useRef(null);
   const importInput = useRef(null);
   const messages = catalog[locale] ?? catalog.en;
+
+  function handleToggleCardChrome() {
+    setShowCardChrome((visible) => !visible);
+  }
   const isRtl = directionFor(locale) === "rtl";
 
   function applyJourneyState(nextState) {
@@ -328,7 +334,8 @@ export default function OpenScrollApp() {
   useEffect(() => {
     if (currentView !== "feed") return;
     const sentinel = bottomSentinelRef.current;
-    if (!sentinel) return;
+    const feed = feedRef.current;
+    if (!sentinel || !feed) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -336,7 +343,7 @@ export default function OpenScrollApp() {
           handleLoadMoreCards();
         }
       },
-      { rootMargin: "600px 0px 600px 0px", threshold: 0.1 }
+      { root: feed, rootMargin: "600px 0px 600px 0px", threshold: 0.1 }
     );
 
     observer.observe(sentinel);
@@ -469,7 +476,11 @@ export default function OpenScrollApp() {
 
         {/* VIEW 2: MULTIMEDIA FEED */}
         {currentView === "feed" ? (
-          <section className="feed" aria-label={`${interest} stream`}>
+          <section
+            ref={feedRef}
+            className={`feed ${isLoadingFeed || isLoadingMore ? "feed--loading" : ""}`}
+            aria-label={`${interest} stream`}
+          >
             <header className="feed-header">
               <IconButton label={messages.back} onClick={() => setCurrentView("search")}>
                 <ArrowLeft className="directional-icon" aria-hidden="true" />
@@ -503,6 +514,8 @@ export default function OpenScrollApp() {
                   onOpenViewer={handleOpenViewer}
                   messages={messages}
                   locale={locale}
+                  showChrome={showCardChrome}
+                  onToggleChrome={handleToggleCardChrome}
                 />
               );
             })}

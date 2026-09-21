@@ -163,6 +163,7 @@ export function WhyOpenSheet({ open, card, onClose, messages, locale }) {
   const isArabic = locale === "ar";
   const title = isArabic && card.original ? card.original : card.title;
   const rights = card.object?.rights;
+  const description = card.object?.content?.description || card.object?.content?.text;
 
   return (
     <Sheet open={open} title={messages.whyOpen} onClose={onClose}>
@@ -177,6 +178,13 @@ export function WhyOpenSheet({ open, card, onClose, messages, locale }) {
             <p className="rights-headline">{card.openBasis}</p>
           </div>
         </div>
+
+        {description ? (
+          <section className="rights-section">
+            <h4>About this item</h4>
+            <p className="sheet-description" dir="auto">{description}</p>
+          </section>
+        ) : null}
 
         <section className="rights-section">
           <h4>{messages.plainPermissions}</h4>
