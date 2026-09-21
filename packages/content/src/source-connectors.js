@@ -33,6 +33,67 @@ async function safeFetch(url, options = {}, timeoutMs = 6000) {
 // ---------------------------------------------------------------------------
 // 1. LIVE WIKIPEDIA / WIKIMEDIA KNOWLEDGE CONNECTOR
 // ---------------------------------------------------------------------------
+function createWikipediaRecord(pageData, { fullText = "", html = "" } = {}) {
+  const overview = pageData.extract || "";
+  const articleText = fullText || overview;
+  const sourceUrl = pageData.content_urls?.desktop?.page || pageData.fullurl || `https://en.wikipedia.org/wiki/${encodeURIComponent(pageData.title)}`;
+
+  return {
+    id: `wikipedia:${pageData.pageid || pageData.title}`,
+    sourceId: "wikipedia",
+    sourceItemId: String(pageData.pageid || pageData.title),
+    canonicalUrl: sourceUrl,
+    sourceUrl,
+    originalSourceUrl: sourceUrl,
+    title: pageData.title,
+    description: pageData.description || overview,
+    language: pageData.lang || "en",
+    languages: [pageData.lang || "en"],
+    topics: [pageData.title, pageData.description].filter(Boolean),
+    creators: [{ name: "Wikipedia Contributors", role: "author" }],
+    content: {
+      type: "reader",
+      text: overview,
+      ...(fullText ? { fullText: articleText } : {}),
+      ...(html ? { html } : {}),
+      readingTimeSeconds: Math.ceil((articleText.split(/\s+/).length || 50) / 3.5),
+      isPrimarySource: false,
+      sections: fullText ? [] : [{ heading: "Overview", content: overview }]
+    },
+    media: pageData.originalimage ? {
+      kind: "image",
+      url: pageData.originalimage.source,
+      thumbnailUrl: pageData.thumbnail?.source || pageData.originalimage.source,
+      width: pageData.originalimage.width,
+      height: pageData.originalimage.height,
+      mime: "image/jpeg",
+      accessibility: {
+        altText: `Image illustrating ${pageData.title}`
+      }
+    } : null,
+    rights: {
+      licenseId: "CC-BY-SA-4.0",
+      licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+      copyrightStatus: "copyrighted",
+      sourceVerified: true,
+      commercialUse: "allowed",
+      modifications: "allowed",
+      attributionRequired: true,
+      attributionNotice: {
+        text: `"${pageData.title}" by Wikipedia contributors, licensed under CC BY-SA 4.0.`
+      }
+    },
+    provenance: {
+      capturedAt: new Date().toISOString(),
+      upstreamLicense: "CC-BY-SA-4.0"
+    },
+    ranking: {
+      quality: 0.88,
+      curationTier: "standard"
+    }
+  };
+}
+
 export async function searchWikipediaLive(query, limit = 8, options = {}) {
   const cleanQ = encodeURIComponent(cleanString(query, 100));
   const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
@@ -49,68 +110,53 @@ export async function searchWikipediaLive(query, limit = 8, options = {}) {
     const pageData = await safeFetch(pageUrl);
 
     if (pageData && pageData.type === "standard") {
-      const ucoItem = {
-        id: `wikipedia:${pageData.pageid || pageData.title}`,
-        sourceId: "wikipedia",
-        sourceItemId: String(pageData.pageid || pageData.title),
-        canonicalUrl: pageData.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
-        sourceUrl: pageData.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
-        originalSourceUrl: pageData.content_urls?.desktop?.page,
-        title: pageData.title,
-        description: pageData.description || pageData.extract,
-        language: pageData.lang || "en",
-        topics: [query, pageData.description].filter(Boolean),
-        creators: [{ name: "Wikipedia Contributors", role: "author" }],
-        content: {
-          type: "reader",
-          text: pageData.extract,
-          readingTimeSeconds: Math.ceil((pageData.extract?.split(/\s+/).length || 50) / 3.5),
-          isPrimarySource: false,
-          sections: [
-            {
-              heading: "Overview",
-              content: pageData.extract
-            }
-          ]
-        },
-        media: pageData.originalimage ? {
-          kind: "image",
-          url: pageData.originalimage.source,
-          thumbnailUrl: pageData.thumbnail?.source || pageData.originalimage.source,
-          width: pageData.originalimage.width,
-          height: pageData.originalimage.height,
-          mime: "image/jpeg",
-          accessibility: {
-            altText: `Image illustrating ${pageData.title}`
-          }
-        } : null,
-        rights: {
-          licenseId: "CC-BY-SA-4.0",
-          licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
-          copyrightStatus: "copyrighted",
-          sourceVerified: true,
-          commercialUse: "allowed",
-          modifications: "allowed",
-          attributionRequired: true,
-          attributionNotice: {
-            text: `"${pageData.title}" by Wikipedia contributors, licensed under CC BY-SA 4.0.`
-          }
-        },
-        provenance: {
-          capturedAt: new Date().toISOString(),
-          upstreamLicense: "CC-BY-SA-4.0"
-        },
-        ranking: {
-          quality: 0.88,
-          curationTier: "standard"
-        }
-      };
-
-      results.push(ucoItem);
+      results.push(createWikipediaRecord(pageData));
     }
   }
 
   return results;
+}
+
+export async function fetchWikipediaArticleLive(title) {
+  const cleanTitle = cleanString(title, 180);
+  if (!cleanTitle) return null;
+
+  const params = new URLSearchParams({
+    action: "query",
+    prop: "extracts|info|pageimages",
+    explaintext: "1",
+    exsectionformat: "plain",
+    inprop: "url",
+    piprop: "original|thumbnail",
+    pithumbsize: "1600",
+    redirects: "1",
+    format: "json",
+    titles: cleanTitle,
+    origin: "*"
+  });
+  const parseParams = new URLSearchParams({
+    action: "parse",
+    page: cleanTitle,
+    prop: "text|sections",
+    disabletoc: "1",
+    format: "json",
+    origin: "*"
+  });
+  const [data, parsedData] = await Promise.all([
+    safeFetch(`https://en.wikipedia.org/w/api.php?${params.toString()}`),
+    safeFetch(`https://en.wikipedia.org/w/api.php?${parseParams.toString()}`)
+  ]);
+  const page = Object.values(data?.query?.pages || {})[0];
+  if (!page || page.missing !== undefined || !page.extract) return null;
+
+  return createWikipediaRecord({
+    ...page,
+    description: page.extract.split(/\n+/)[0],
+    content_urls: { desktop: { page: page.fullurl } }
+  }, {
+    fullText: page.extract,
+    html: parsedData?.parse?.text?.["*"] || ""
+  });
 }
 
 // ---------------------------------------------------------------------------

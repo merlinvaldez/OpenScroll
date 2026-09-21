@@ -1483,6 +1483,19 @@ button:disabled {
   color: var(--os-muted);
 }
 
+.reader-loading {
+  margin: 0 0 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--os-line);
+  border-radius: 10px;
+  color: var(--os-muted);
+  font-size: 14px;
+}
+
+.reader-loading--error {
+  color: var(--os-danger, #a63d40);
+}
+
 .reader-image-stack {
   display: grid;
   gap: 18px;
@@ -1519,6 +1532,86 @@ button:disabled {
 
 .reader-body p {
   margin: 0;
+}
+
+.reader-body--formatted {
+  display: block;
+}
+
+.reader-body--formatted > * {
+  margin: 0 0 18px;
+}
+
+.reader-body--formatted h2,
+.reader-body--formatted h3,
+.reader-body--formatted h4 {
+  margin-top: 30px;
+  margin-bottom: 10px;
+  font-family: var(--os-font-display);
+  line-height: 1.25;
+}
+
+.reader-body--formatted h2 { font-size: 26px; }
+.reader-body--formatted h3 { font-size: 21px; }
+.reader-body--formatted h4 { font-size: 18px; }
+
+.reader-body--formatted ul,
+.reader-body--formatted ol {
+  padding-inline-start: 24px;
+}
+
+.reader-body--formatted li + li {
+  margin-top: 8px;
+}
+
+.reader-body--formatted a {
+  color: var(--os-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.reader-body--formatted blockquote {
+  margin-inline: 0;
+  padding-inline-start: 18px;
+  border-inline-start: 3px solid var(--os-primary);
+  color: var(--os-muted);
+  font-style: italic;
+}
+
+.reader-body--formatted table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reader-body--formatted th,
+.reader-body--formatted td {
+  padding: 8px 10px;
+  border: 1px solid var(--os-line);
+  text-align: start;
+  vertical-align: top;
+}
+
+.reader-body--formatted th {
+  background: color-mix(in srgb, var(--os-primary) 9%, var(--os-surface));
+  font-weight: 700;
+}
+
+.reader-body--formatted img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12px auto;
+  border-radius: 12px;
+}
+
+.reader-body--formatted sup {
+  font-size: 0.7em;
+  line-height: 0;
 }
 
 .reader-section {

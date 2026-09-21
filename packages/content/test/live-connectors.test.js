@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { queryLiveConnectors, searchWikipediaLive, searchCommonsLive } from "../src/index.js";
+import { fetchWikipediaArticleLive, queryLiveConnectors, searchWikipediaLive, searchCommonsLive } from "../src/index.js";
 
 test("live Wikipedia search returns real, rich reader UCO items", async () => {
   const items = await searchWikipediaLive("Tokyo", 3);
@@ -12,6 +12,47 @@ test("live Wikipedia search returns real, rich reader UCO items", async () => {
     assert.ok(first.content.text.length > 20);
     assert.equal(first.rights.licenseId, "CC-BY-SA-4.0");
     assert.ok(first.rights.attributionNotice.text.includes("Wikipedia contributors"));
+  }
+});
+
+test("full Wikipedia article fetch returns the complete plaintext article", async () => {
+  const originalFetch = globalThis.fetch;
+  const articleText = "Overview paragraph.\n\nHistory\nThe full article continues beyond the overview.";
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    if (new URL(url).searchParams.get("action") === "parse") {
+      return {
+        ok: true,
+        json: async () => ({ parse: { text: { "*": "<p>Overview paragraph.</p><h2>History</h2><ul><li>The full article continues.</li></ul>" } } })
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        query: {
+          pages: {
+            "42": {
+              pageid: 42,
+              title: "OpenScroll",
+              fullurl: "https://en.wikipedia.org/wiki/OpenScroll",
+              extract: articleText
+            }
+          }
+        }
+      })
+    };
+  };
+
+  try {
+    const item = await fetchWikipediaArticleLive("OpenScroll");
+    assert.equal(item.content.fullText, articleText);
+    assert.match(item.content.html, /<h2>History<\/h2>/);
+    assert.equal(item.content.sections.length, 0);
+    assert.ok(calls.some((url) => url.includes("explaintext=1")));
+    assert.ok(calls.some((url) => url.includes("action=parse")));
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 

@@ -74,6 +74,20 @@ test("article content preserves reading text, sections, and images through UCO n
   assert.equal(article.content.images[0].altText, "An archival scene");
 });
 
+test("article content preserves full text line breaks for in-app reading", () => {
+  const article = createUniversalContentObject({
+    ...EPIC_C_RAW_ITEMS[0],
+    type: "article",
+    content: {
+      type: "reader",
+      text: "Overview",
+      fullText: "Overview\n\nHistory\nThe article continues here."
+    }
+  });
+
+  assert.equal(article.content.fullText, "Overview\n\nHistory\nThe article continues here.");
+});
+
 test("OS-015 through OS-020 connectors pass the SDK conformance suite", async () => {
   const results = await Promise.all(EPIC_C_CONNECTORS.map((connector) => runConnectorConformance(connector, { query: "Morocco" })));
   for (const result of results) assert.equal(result.passed, true, `${result.connectorId}: ${JSON.stringify(result.checks)}`);

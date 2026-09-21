@@ -5,6 +5,12 @@ import { asArray, cleanString, deepFreeze, isoDate, numberBetween, slug, unique 
 export const UNIVERSAL_CONTENT_OBJECT_VERSION = "uco.v1";
 export const REQUIRED_UCO_SECTIONS = Object.freeze(["identity", "content", "creator", "time", "geography", "language", "knowledge", "media", "source", "rights", "ranking", "system"]);
 
+function cleanContentText(value, maxLength) {
+  return typeof value === "string"
+    ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f<>]/g, "").replace(/\r\n?/g, "\n").trim().slice(0, maxLength)
+    : "";
+}
+
 function provenance(source, sourceField, confidence = 0.9, transform = "normalized") {
   return { sourceId: source.id, sourceName: source.name, sourceField, confidence: numberBetween(confidence, 0, 1, 0.9), transform };
 }
@@ -53,10 +59,12 @@ export function createUniversalContentObject(record, options = {}) {
   })).filter((place) => place.label);
   const topics = unique(asArray(record.topics).map((topic) => cleanString(topic, 80)).filter(Boolean));
   const languages = unique(asArray(record.languages).map((language) => cleanString(language, 24)).filter(Boolean));
-  const contentText = cleanString(record.content?.text || record.text || "", 20000);
+  const contentText = cleanContentText(record.content?.text || record.text || "", 20000);
+  const fullText = cleanContentText(record.content?.fullText || "", 200000);
+  const contentHtml = typeof record.content?.html === "string" ? record.content.html.slice(0, 500000) : "";
   const contentSections = asArray(record.content?.sections).map((section) => ({
     heading: cleanString(section?.heading, 180),
-    content: cleanString(section?.content || section?.text, 12000)
+    content: cleanContentText(section?.content || section?.text, 12000)
   })).filter((section) => section.content);
   const contentImages = asArray(record.content?.images || record.images).map((image) => ({
     url: cleanString(image?.url || image, 300),
@@ -80,6 +88,8 @@ export function createUniversalContentObject(record, options = {}) {
       originalTitle: cleanString(record.originalTitle || record.title, 180),
       description: cleanString(record.description, 500),
       text: contentText,
+      ...(fullText ? { fullText } : {}),
+      ...(contentHtml ? { html: contentHtml } : {}),
       sections: contentSections,
       images: contentImages,
       readingTimeSeconds: Number.isFinite(record.content?.readingTimeSeconds) ? record.content.readingTimeSeconds : null,

@@ -24,7 +24,60 @@ import { Sheet } from "./primitives";
 
 function readerText(card) {
   const content = card.object?.content || {};
-  return content.text || content.sections?.map((section) => section.content).filter(Boolean).join("\n\n") || content.description || "Open knowledge overview and verified archival documentation.";
+  return content.fullText || content.text || content.sections?.map((section) => section.content).filter(Boolean).join("\n\n") || content.description || "Open knowledge overview and verified archival documentation.";
+}
+
+function sanitizeArticleHtml(markup) {
+  if (!markup || typeof window === "undefined") return "";
+
+  const allowedTags = new Set([
+    "A", "B", "BLOCKQUOTE", "BR", "CAPTION", "CODE", "DD", "DIV", "DL", "DT", "EM", "FIGCAPTION", "FIGURE",
+    "H2", "H3", "H4", "I", "IMG", "LI", "OL", "P", "PRE", "SMALL", "SPAN", "STRONG", "SUB", "SUP", "TABLE",
+    "TBODY", "TD", "TH", "THEAD", "TR", "UL"
+  ]);
+  const removableClass = /(?:mw-editsection|navbox|sidebar|metadata|shortdescription|sistersitebox|noprint|nomobile)/i;
+  const document = new DOMParser().parseFromString(markup, "text/html");
+
+  for (const element of [...document.body.querySelectorAll("*")]) {
+    const className = typeof element.className === "string" ? element.className : "";
+    if (removableClass.test(className) || ["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "FORM", "INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(element.tagName)) {
+      element.remove();
+      continue;
+    }
+
+    if (!allowedTags.has(element.tagName)) {
+      const parent = element.parentNode;
+      if (!parent) continue;
+      while (element.firstChild) parent.insertBefore(element.firstChild, element);
+      element.remove();
+      continue;
+    }
+
+    for (const attribute of [...element.attributes]) {
+      if (!["alt", "colspan", "href", "rowspan", "scope", "src", "title"].includes(attribute.name)) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+
+    if (element.tagName === "A") {
+      const href = element.getAttribute("href") || "";
+      if (href.startsWith("//")) element.setAttribute("href", `https:${href}`);
+      else if (href.startsWith("/")) element.setAttribute("href", `https://en.wikipedia.org${href}`);
+      else if (!/^https?:\/\//i.test(href) && !href.startsWith("#")) element.removeAttribute("href");
+      if (element.hasAttribute("href")) {
+        element.setAttribute("target", "_blank");
+        element.setAttribute("rel", "noreferrer noopener");
+      }
+    }
+
+    if (element.tagName === "IMG") {
+      const src = element.getAttribute("src") || "";
+      if (src.startsWith("//")) element.setAttribute("src", `https:${src}`);
+      if (!/^https?:\/\//i.test(element.getAttribute("src") || "")) element.remove();
+    }
+  }
+
+  return document.body.innerHTML;
 }
 
 function readerParagraphs(text) {
@@ -277,17 +330,62 @@ export function WhyOpenSheet({ open, card, onClose, messages, locale }) {
 }
 
 export function FocusedViewerModal({ open, card, mode = "image", onClose, messages, locale }) {
+  const [articleState, setArticleState] = useState({ status: "idle", item: null, error: "" });
+  const articleSource = card?.object?.source?.id || card?.object?.sourceId;
+  const articleTitle = card?.object?.content?.originalTitle || card?.object?.content?.title || card?.title || "";
+
+  useEffect(() => {
+    if (!open || mode !== "reader" || !card || articleSource !== "wikipedia" || !articleTitle) {
+      setArticleState({ status: "idle", item: null, error: "" });
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    setArticleState({ status: "loading", item: null, error: "" });
+
+    fetch(`/api/article?source=wikipedia&title=${encodeURIComponent(articleTitle)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.error || "The full article could not be loaded.");
+        return payload?.data?.item;
+      })
+      .then((item) => {
+        if (!item) throw new Error("The full article could not be loaded.");
+        if (active) setArticleState({ status: "ready", item, error: "" });
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError" && active) {
+          setArticleState({ status: "error", item: null, error: error.message });
+        }
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [open, mode, card?.id, articleSource, articleTitle]);
+
   if (!card || !open) return null;
+  const readerCard = articleState.item ? {
+    ...card,
+    title: articleState.item.content?.title || card.title,
+    original: articleState.item.content?.originalTitle || card.original,
+    source: articleState.item.source?.name || card.source,
+    license: articleState.item.rights?.label || card.license,
+    object: articleState.item
+  } : card;
   const isArabic = locale === "ar";
-  const title = isArabic && card.original ? card.original : card.title;
+  const title = isArabic && readerCard.original ? readerCard.original : readerCard.title;
   const imageUrl = card.object?.media?.url || card.downloadUrl;
-  const content = card.object?.content || {};
-  const articleText = readerText(card);
+  const content = readerCard.object?.content || {};
+  const articleText = readerText(readerCard);
+  const articleHtml = sanitizeArticleHtml(content.html);
   const articleParagraphs = readerParagraphs(articleText);
-  const articleLead = content.description && content.description !== articleText ? content.description : articleParagraphs[0];
+  const articleLead = articleHtml ? null : content.description && content.description !== articleText ? content.description : articleParagraphs[0];
   const articleSections = Array.isArray(content.sections) ? content.sections.filter((section) => section?.content) : [];
-  const articleImages = readerImages(card);
-  const sourceUrl = card.downloadUrl || card.object?.identity?.sourceRecordUrl || card.object?.canonicalUrl;
+  const articleImages = articleHtml ? [] : readerImages(readerCard);
+  const sourceUrl = readerCard.object?.identity?.sourceRecordUrl || readerCard.object?.canonicalUrl || readerCard.downloadUrl;
 
   return (
     <dialog
@@ -327,10 +425,16 @@ export function FocusedViewerModal({ open, card, mode = "image", onClose, messag
         {mode === "reader" ? (
           <article className="focused-reader-container" dir="auto">
             <div className="reader-typography-bar">
-              <span className="reader-source-tag">{card.source}</span>
-              <span className="reader-license-tag">{card.license}</span>
+              <span className="reader-source-tag">{readerCard.source}</span>
+              <span className="reader-license-tag">{readerCard.license}</span>
             </div>
             <h1 id="focused-reader-title" className="reader-title">{title}</h1>
+            {articleState.status === "loading" ? (
+              <p className="reader-loading" role="status">Loading the full article…</p>
+            ) : null}
+            {articleState.status === "error" ? (
+              <p className="reader-loading reader-loading--error" role="alert">{articleState.error} Showing the available overview.</p>
+            ) : null}
             {articleLead ? <p className="reader-lead">{articleLead}</p> : null}
             {articleImages.length ? (
               <div className="reader-image-stack">
@@ -347,16 +451,20 @@ export function FocusedViewerModal({ open, card, mode = "image", onClose, messag
                 ))}
               </div>
             ) : null}
-            <div className="reader-body">
-              {articleSections.length ? articleSections.map((section, index) => (
+            {articleHtml ? (
+              <div className="reader-body reader-body--formatted" dangerouslySetInnerHTML={{ __html: articleHtml }} />
+            ) : (
+              <div className="reader-body">
+                {articleSections.length ? articleSections.map((section, index) => (
                 <section className="reader-section" key={`${section.heading || "section"}-${index}`}>
                   {section.heading ? <h2>{section.heading}</h2> : null}
                   <p>{section.content}</p>
                 </section>
-              )) : articleParagraphs.slice(articleLead === articleParagraphs[0] ? 1 : 0).map((paragraph, index) => (
-                <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
-              ))}
-            </div>
+                )) : articleParagraphs.slice(articleLead === articleParagraphs[0] ? 1 : 0).map((paragraph, index) => (
+                  <p key={`${paragraph.slice(0, 24)}-${index}`}>{paragraph}</p>
+                ))}
+              </div>
+            )}
             <div className="reader-footer">
               <a href={sourceUrl} target="_blank" rel="noreferrer" className="rights-source-link">
                 <ExternalLink size={16} aria-hidden="true" />
