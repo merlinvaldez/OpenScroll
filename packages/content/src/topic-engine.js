@@ -1,7 +1,10 @@
+import { experimental_evaluate as evaluate } from "ai";
 import { cleanString, deepFreeze, slug, unique } from "./utils.js";
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o";
+const DEFAULT_JEV_MODEL = "typesafe-ai/jev";
+const DEFAULT_JEV_RELEVANCE_THRESHOLD = 0.75;
 
 export class OpenAIConfigurationError extends Error {
   constructor(message) {
@@ -19,6 +22,22 @@ export class OpenAIRequestError extends Error {
   }
 }
 
+export class JevConfigurationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "JevConfigurationError";
+    this.status = 503;
+  }
+}
+
+export class JevRequestError extends Error {
+  constructor(message, status = 502) {
+    super(message);
+    this.name = "JevRequestError";
+    this.status = status;
+  }
+}
+
 function getOpenAIConfig(options = {}) {
   const apiKey = options.apiKey || (typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : "");
   const model = options.model || (typeof process !== "undefined" ? process.env?.OPENAI_MODEL : "") || DEFAULT_OPENAI_MODEL;
@@ -28,6 +47,24 @@ function getOpenAIConfig(options = {}) {
   }
 
   return { apiKey: apiKey.trim(), model: model.trim() || DEFAULT_OPENAI_MODEL };
+}
+
+function getJevConfig(options = {}) {
+  const model = options.model || (typeof process !== "undefined" ? process.env?.JEV_MODEL : "") || DEFAULT_JEV_MODEL;
+  const configuredThreshold = options.relevanceThreshold ?? (typeof process !== "undefined" ? process.env?.JEV_RELEVANCE_THRESHOLD : "");
+  const relevanceThreshold = configuredThreshold === "" || configuredThreshold === undefined
+    ? DEFAULT_JEV_RELEVANCE_THRESHOLD
+    : Number(configuredThreshold);
+
+  if (!model || !model.trim()) {
+    throw new JevConfigurationError("JEV_MODEL is required for OpenScroll feed evaluation.");
+  }
+
+  if (!Number.isFinite(relevanceThreshold) || relevanceThreshold < 0 || relevanceThreshold > 1) {
+    throw new JevConfigurationError("JEV_RELEVANCE_THRESHOLD must be a number between 0 and 1.");
+  }
+
+  return { model: model.trim(), relevanceThreshold };
 }
 
 async function requestOpenAIJson(messages, options = {}) {
@@ -101,58 +138,58 @@ export async function evaluateFeedCandidates(term, candidates, options = {}) {
   }
 
   const candidateSummary = candidates.map(evaluationCandidate);
-  const payload = await requestOpenAIJson([
+  const { model, relevanceThreshold } = getJevConfig(options);
+  const questions = Object.fromEntries(candidateSummary.map((_, index) => [
+    `candidate_${index}_relevant`,
     {
-      role: "system",
-      content: "You are OpenScroll's strict feed relevance evaluator. Output JSON only."
-    },
-    {
-      role: "user",
-      content: `Evaluate whether each candidate is semantically relevant to the search term "${cleanTerm}".
-
-A candidate passes only when it is meaningfully about the search term. Reject incidental keyword matches, generic images, loosely associated people or places, and candidates whose relevance depends only on the source name. Use the title and description as evidence. Prefer a precise semantic match over a broad cultural association.
-
-Return exactly one evaluation for every candidate index in the input, with this JSON shape:
-{
-  "evaluations": [
-    {
-      "candidateIndex": 0,
-      "termRelated": true,
-      "pass": true,
-      "reason": "Short evidence-based explanation."
+      type: "boolean",
+      instructions: `Is candidates[${index}] meaningfully relevant to term? Judge only the candidate title, description, topics, source, and media kind. Reject incidental keyword matches, generic media, loosely associated people or places, and relevance that depends only on the source name.`
     }
-  ]
-}
+  ]));
 
-Candidates:
-${JSON.stringify(candidateSummary)}`
+  let payload;
+  try {
+    const evaluateModel = options.evaluate || evaluate;
+    if (typeof evaluateModel !== "function") {
+      throw new JevConfigurationError("The Jev evaluator is unavailable.");
     }
-  ], options);
 
-  if (!Array.isArray(payload?.evaluations) || payload.evaluations.length !== candidates.length) {
-    throw new OpenAIRequestError("OpenAI returned an incomplete feed evaluation.");
+    payload = await evaluateModel({
+      model,
+      state: {
+        term: cleanTerm,
+        candidates: candidateSummary
+      },
+      questions,
+      maxRetries: 0,
+      providerOptions: {
+        gateway: {
+          only: ["typesafe-ai"],
+          tags: ["feature:openscroll-feed-evaluator"]
+        }
+      }
+    });
+  } catch (error) {
+    if (error instanceof JevConfigurationError) throw error;
+    throw new JevRequestError(`Jev request failed: ${error.message}`);
   }
 
   const evaluations = new Array(candidates.length);
-  for (const evaluation of payload.evaluations) {
-    const index = evaluation?.candidateIndex;
-    if (!Number.isInteger(index) || index < 0 || index >= candidates.length || evaluations[index]) {
-      throw new OpenAIRequestError("OpenAI returned invalid feed evaluation indexes.");
-    }
-    if (typeof evaluation.termRelated !== "boolean" || typeof evaluation.pass !== "boolean" || !cleanString(evaluation.reason, 300)) {
-      throw new OpenAIRequestError("OpenAI returned an invalid feed evaluation.");
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidateAnswer = payload?.answers?.[`candidate_${index}_relevant`];
+    const relevanceProbability = candidateAnswer?.probability;
+    if (candidateAnswer?.type !== "boolean" || !Number.isFinite(relevanceProbability) || relevanceProbability < 0 || relevanceProbability > 1) {
+      throw new JevRequestError("Jev returned an invalid feed evaluation.");
     }
 
+    const pass = relevanceProbability >= relevanceThreshold;
     evaluations[index] = {
       candidateIndex: index,
-      termRelated: evaluation.termRelated,
-      pass: evaluation.pass,
-      reason: cleanString(evaluation.reason, 300)
+      termRelated: pass,
+      pass,
+      relevanceProbability,
+      reason: `Jev relevance probability ${relevanceProbability.toFixed(3)}.`
     };
-  }
-
-  if (evaluations.some((evaluation) => !evaluation)) {
-    throw new OpenAIRequestError("OpenAI did not evaluate every feed candidate.");
   }
 
   return {

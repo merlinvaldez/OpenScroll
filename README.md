@@ -21,4 +21,4 @@ npm run test:a11y
 
 Environment separation is documented in `docs/ENVIRONMENTS.md`; manual accessibility verification is in `docs/ACCESSIBILITY_TEST_PLAN.md`.
 
-Topic expansion and entity resolution use OpenAI exclusively. OpenAI generates both the query-specific category taxonomy and the topics inside each category; the app no longer supplies a static category list. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in the local environment; there is no local, Wikipedia, or curated fallback when OpenAI fails.
+Topic expansion and entity resolution use OpenAI exclusively. OpenAI generates both the query-specific category taxonomy and the topics inside each category; the app no longer supplies a static category list. Live feed candidate relevance is evaluated by Jev through Vercel AI Gateway using `typesafe-ai/jev`; it has no OpenAI fallback. Set `OPENAI_API_KEY` and `OPENAI_MODEL` for topic/entity features, and `AI_GATEWAY_API_KEY` or Vercel OIDC for Jev feed evaluation.

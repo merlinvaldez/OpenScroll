@@ -115,39 +115,44 @@ test("entity resolution also uses OpenAI only", async () => {
   }
 });
 
-test("feed evaluation requires semantic relevance to the search term", async () => {
-  const requests = [];
-  const restore = withMockedFetch(async (url, init) => {
-    requests.push({ url, init });
-    return mockResponse({
-      choices: [{
-        message: {
-          content: JSON.stringify({
-            evaluations: [
-              { candidateIndex: 0, termRelated: true, pass: true, reason: "The artifact directly represents Morocco." },
-              { candidateIndex: 1, termRelated: false, pass: false, reason: "The candidate is not meaningfully about Morocco." }
-            ]
-          })
+test("feed evaluation uses Jev relevance probabilities without an OpenAI fallback", async () => {
+  const calls = [];
+  const result = await evaluateFeedCandidates("Morocco", [
+    { id: "pass", title: "Morocco", description: "A textile artifact from Morocco." },
+    { id: "reject", title: "Morocco coastline", description: "A landscape photograph." }
+  ], {
+    evaluate: async (request) => {
+      calls.push(request);
+      return {
+        answers: {
+          candidate_0_relevant: { type: "boolean", probability: 0.92 },
+          candidate_1_relevant: { type: "boolean", probability: 0.18 }
         }
-      }]
-    });
+      };
+    },
+    relevanceThreshold: 0.75
   });
 
-  try {
-    const result = await evaluateFeedCandidates("Morocco", [
-      { id: "pass", title: "Morocco", description: "A textile artifact from Morocco." },
-      { id: "reject", title: "Morocco coastline", description: "A landscape photograph." }
-    ], { apiKey: "test-key", model: "test-model" });
+  assert.deepEqual(result.accepted.map((candidate) => candidate.id), ["pass"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].model, "typesafe-ai/jev");
+  assert.equal(calls[0].maxRetries, 0);
+  assert.deepEqual(calls[0].providerOptions.gateway.only, ["typesafe-ai"]);
+  assert.equal(calls[0].state.term, "Morocco");
+  assert.match(calls[0].questions.candidate_0_relevant.instructions, /meaningfully relevant/);
+  assert.equal(result.evaluations[0].relevanceProbability, 0.92);
+  assert.equal(result.evaluations[1].relevanceProbability, 0.18);
+});
 
-    assert.deepEqual(result.accepted.map((candidate) => candidate.id), ["pass"]);
-    assert.equal(requests.length, 1);
-    const prompt = JSON.parse(requests[0].init.body).messages[1].content;
-    assert.match(prompt, /Morocco/);
-    assert.match(prompt, /semantically relevant to the search term/);
-    assert.doesNotMatch(prompt, /selected subtopic/);
-  } finally {
-    restore();
-  }
+test("feed evaluation surfaces Jev failures instead of falling back", async () => {
+  await assert.rejects(
+    () => evaluateFeedCandidates("Morocco", [{ id: "candidate", title: "Morocco", description: "A textile artifact." }], {
+      evaluate: async () => {
+        throw new Error("gateway unavailable");
+      }
+    }),
+    /Jev request failed: gateway unavailable/
+  );
 });
 
 test("query planner constructs multi-source search vectors", () => {
