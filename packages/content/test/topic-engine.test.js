@@ -150,6 +150,36 @@ test("feed evaluation requires semantic relevance to the search term", async () 
   }
 });
 
+test("feed evaluation receives retrieval evidence without treating it as proof", async () => {
+  const restore = withMockedFetch(async (_url, init) => {
+    const prompt = JSON.parse(init.body).messages[1].content;
+    assert.match(prompt, /retrieval metadata explains how the candidate was found/i);
+    assert.match(prompt, /title-match/);
+    return mockResponse({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            evaluations: [{ candidateIndex: 0, termRelated: true, pass: true, reason: "The title directly matches the resolved entity." }]
+          })
+        }
+      }]
+    });
+  });
+
+  try {
+    const result = await evaluateFeedCandidates("Gnawa", [{
+      id: "candidate",
+      title: "Gnawa musicians",
+      description: "A performance recording.",
+      knowledge: { retrieval: { query: "intitle:Gnawa", strategy: "title-match" } }
+    }], { apiKey: "test-key", model: "test-model" });
+
+    assert.equal(result.accepted.length, 1);
+  } finally {
+    restore();
+  }
+});
+
 test("query planner constructs multi-source search vectors", () => {
   const entity = { id: "AI-morocco", label: "Morocco" };
   const plan = buildQueryPlan(entity, ["Gnawa", "Architecture", "Darija"], "en");

@@ -2334,7 +2334,8 @@ button:disabled {
 
 .infinite-stream-loader {
   display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px 20px;
   border-radius: 999px;
@@ -2344,6 +2345,18 @@ button:disabled {
   font-size: 13px;
   font-weight: 500;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.infinite-stream-loader__main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.infinite-stream-loader__detail {
+  color: var(--os-muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .infinite-stream-loader--subtle {

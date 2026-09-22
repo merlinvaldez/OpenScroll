@@ -1,166 +1,46 @@
-import { queryLiveConnectors, evaluateFeedCandidates, composeDiversityFeed } from "@openscroll/content";
+import { composeSearchFeed } from "@openscroll/content";
 import { NextResponse } from "next/server";
 
-const PASSING_RESULTS_PER_BATCH = 25;
-const EVALUATION_BATCH_SIZE = 5;
-const MAX_REQUERY_ROUNDS = 20;
-const MEDIA_TYPE_KINDS = Object.freeze({ images: "image", audio: "audio", video: "video", text: "text", data: "data" });
-const MEDIA_TYPE_SOURCES = Object.freeze({ images: ["wikimedia-commons"], audio: ["wikimedia-commons"], video: ["wikimedia-commons"], text: ["wikipedia"], data: ["wikimedia-commons"] });
-const TEXT_CONTENT_TYPES = new Set(["article", "reader", "source-text", "dictionary", "travel-guide", "text"]);
-
-function candidateMatchesMediaType(candidate, mediaType) {
-  if (mediaType === "text") return candidate.media?.kind === "text" || TEXT_CONTENT_TYPES.has(candidate.content?.type);
-  return candidate.media?.kind === MEDIA_TYPE_KINDS[mediaType];
-}
-
-function normalizeMediaTypes(value) {
-  if (!Array.isArray(value)) return Object.keys(MEDIA_TYPE_KINDS);
-  return Array.from(new Set(value.filter((mediaType) => Object.hasOwn(MEDIA_TYPE_KINDS, mediaType))));
-}
-
-function normalizeMediaOffsets(value, mediaTypes) {
-  const offsets = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  return Object.fromEntries(mediaTypes.map((mediaType) => [
-    mediaType,
-    Number.isInteger(offsets[mediaType]) && offsets[mediaType] >= 0 ? offsets[mediaType] : 0
-  ]));
-}
-
-async function fetchPassingTermResults(term, mediaTypes, startOffsets = {}) {
-  const passingByMediaType = new Map(mediaTypes.map((mediaType) => [mediaType, []]));
-  const seenIds = new Set();
-  const nextOffsets = normalizeMediaOffsets(startOffsets, mediaTypes);
-  const exhaustedMediaTypes = new Set();
-
-  const passingCount = () => Array.from(passingByMediaType.values()).reduce((count, items) => count + items.length, 0);
-
-  for (let round = 0; round < MAX_REQUERY_ROUNDS && passingCount() < PASSING_RESULTS_PER_BATCH; round += 1) {
-    const activeMediaTypes = mediaTypes.filter((mediaType) => !exhaustedMediaTypes.has(mediaType));
-    if (!activeMediaTypes.length) break;
-
-    const responses = await Promise.all(activeMediaTypes.map(async (mediaType) => ({
-      mediaType,
-      candidates: await queryLiveConnectors(term, {
-        limit: EVALUATION_BATCH_SIZE,
-        offset: nextOffsets[mediaType],
-        mediaType: MEDIA_TYPE_KINDS[mediaType],
-        sources: MEDIA_TYPE_SOURCES[mediaType],
-        allowFixtureFallback: false
-      })
-    })));
-
-    const freshCandidates = responses.flatMap(({ mediaType, candidates }) => {
-      nextOffsets[mediaType] += candidates.length;
-      if (candidates.length < EVALUATION_BATCH_SIZE) exhaustedMediaTypes.add(mediaType);
-
-      return candidates.filter((candidate) => {
-        if (!candidate?.id || seenIds.has(candidate.id)) return false;
-        seenIds.add(candidate.id);
-        return true;
+function streamResponse(body) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      const send = (payload) => controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+      Promise.resolve().then(async () => {
+        try {
+          const data = await composeSearchFeed(body, { onProgress: (progress) => send({ type: "progress", ...progress }) });
+          send({ type: "result", payload: { version: "1", requestId: crypto.randomUUID(), data } });
+        } catch (error) {
+          send({ type: "error", error: error.message, status: error.status || 500 });
+        } finally {
+          controller.close();
+        }
       });
-    });
-
-    if (!freshCandidates.length) {
-      break;
     }
+  });
 
-    const evaluation = await evaluateFeedCandidates(term, freshCandidates);
-    for (const candidate of evaluation.accepted) {
-      const mediaType = mediaTypes.find((type) => candidateMatchesMediaType(candidate, type));
-      if (mediaType && passingCount() < PASSING_RESULTS_PER_BATCH) {
-        passingByMediaType.get(mediaType).push(candidate);
-      }
+  return new Response(stream, {
+    headers: {
+      "Cache-Control": "no-cache, no-transform",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "X-Accel-Buffering": "no"
     }
-  }
-
-  const passing = [];
-  let added = true;
-  while (passing.length < PASSING_RESULTS_PER_BATCH && added) {
-    added = false;
-    for (const mediaType of mediaTypes) {
-      const queue = passingByMediaType.get(mediaType);
-      if (!queue?.length || passing.length >= PASSING_RESULTS_PER_BATCH) continue;
-      passing.push(queue.shift());
-      added = true;
-    }
-  }
-
-  return {
-    items: passing,
-    nextOffsets,
-    hasMore: exhaustedMediaTypes.size < mediaTypes.length
-  };
+  });
 }
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const {
-      interest = "",
-      feedback = [],
-      cursor = 0,
-      pageSize = 25,
-      seed,
-      sourceOffsets = {},
-      mediaTypes
-    } = body;
-
-    const searchTerm = typeof interest === "string" ? interest.trim() : "";
-    if (!searchTerm) {
-      return NextResponse.json({ error: "A search term is required" }, { status: 400 });
-    }
-
-    const selectedMediaTypes = normalizeMediaTypes(mediaTypes);
-    if (!selectedMediaTypes.length) {
-      return NextResponse.json({ error: "At least one media type is required" }, { status: 400 });
-    }
-
-    // Search each selected media type concurrently, return all responses to the
-    // evaluation stage, then keep only candidates OpenAI judges relevant.
-    const savedOffsets = sourceOffsets?.[searchTerm];
-    const termResult = await fetchPassingTermResults(
-      searchTerm,
-      selectedMediaTypes,
-      savedOffsets && typeof savedOffsets === "object" ? savedOffsets : {}
-    );
-    const candidates = termResult.items.map((item) => ({
-      ...item,
-      knowledge: {
-        ...(item.knowledge || {}),
-        topics: Array.from(new Set([...(item.knowledge?.topics || []), searchTerm]))
-      }
-    }));
-
-    const result = composeDiversityFeed(candidates, {
-      interestGraph: {
-        interest: searchTerm,
-        topics: [],
-        topicWeights: {},
-        excludedTopics: []
-      },
-      feedback,
-      cursor,
-      pageSize,
-      seed
-    });
-
-    return NextResponse.json({
-      version: "1",
-      requestId: crypto.randomUUID(),
-      data: {
-        ...result,
-        mediaTypes: selectedMediaTypes,
-        sourceOffsets: { [searchTerm]: termResult.nextOffsets },
-        sourceHasMore: termResult.hasMore
-      }
-    });
+    if (request.headers.get("accept")?.includes("application/x-ndjson")) return streamResponse(body);
+    const data = await composeSearchFeed(body);
+    return NextResponse.json({ version: "1", requestId: crypto.randomUUID(), data });
   } catch (error) {
     return NextResponse.json(
       {
-        error: "Failed to compose feed",
+        error: error.status === 400 ? error.message : "Failed to compose feed",
         message: error.message
       },
-      { status: 500 }
+      { status: Number.isInteger(error?.status) ? error.status : 500 }
     );
   }
 }

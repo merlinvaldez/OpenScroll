@@ -89,6 +89,14 @@ function evaluationCandidate(candidate, index) {
       ...(candidate.content?.topics || []),
       ...(candidate.topics || [])
     ]).map((topic) => cleanString(topic, 120)).filter(Boolean).slice(0, 12),
+    retrieval: candidate.knowledge?.retrieval ? {
+      originalQuery: cleanString(candidate.knowledge.retrieval.originalQuery, 160),
+      query: cleanString(candidate.knowledge.retrieval.query, 160),
+      strategy: cleanString(candidate.knowledge.retrieval.strategy, 80),
+      entity: cleanString(candidate.knowledge.retrieval.entity, 160),
+      categories: unique((candidate.knowledge.retrieval.categories || []).map((category) => cleanString(category, 120))).slice(0, 12),
+      objectName: cleanString(candidate.knowledge.retrieval.objectName, 180)
+    } : null,
     source: cleanString(candidate.source?.name || candidate.source?.id || candidate.sourceId, 100),
     mediaKind: cleanString(candidate.media?.kind || candidate.content?.type, 60)
   };
@@ -110,7 +118,7 @@ export async function evaluateFeedCandidates(term, candidates, options = {}) {
       role: "user",
       content: `Evaluate whether each candidate is semantically relevant to the search term "${cleanTerm}".
 
-A candidate passes only when it is meaningfully about the search term. Reject incidental keyword matches, generic images, loosely associated people or places, and candidates whose relevance depends only on the source name. Use the title and description as evidence. Prefer a precise semantic match over a broad cultural association.
+A candidate passes only when it is meaningfully about the search term. Reject incidental keyword matches, generic images, loosely associated people or places, and candidates whose relevance depends only on the source name. Use the title and description as evidence. Retrieval metadata explains how the candidate was found, but is not proof of relevance by itself. Prefer a precise semantic match over a broad cultural association.
 
 Return exactly one evaluation for every candidate index in the input, with this JSON shape:
 {

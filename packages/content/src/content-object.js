@@ -118,6 +118,19 @@ export function createUniversalContentObject(record, options = {}) {
     knowledge: {
       entities: asArray(record.entities).map((entity) => ({ id: cleanString(entity.id, 80), label: cleanString(entity.label, 160), source: cleanString(entity.source || "source", 80) })).filter((entity) => entity.label),
       topics,
+      ...(record.retrieval && typeof record.retrieval === "object" ? {
+        retrieval: {
+          originalQuery: cleanString(record.retrieval.originalQuery, 160),
+          query: cleanString(record.retrieval.query, 160),
+          strategy: cleanString(record.retrieval.strategy, 80),
+          variantKey: cleanString(record.retrieval.variantKey, 80),
+          entity: cleanString(record.retrieval.entity, 160),
+          categories: asArray(record.retrieval.categories).map((category) => cleanString(category, 120)).filter(Boolean).slice(0, 20),
+          objectName: cleanString(record.retrieval.objectName, 180),
+          dateTimeOriginal: cleanString(record.retrieval.dateTimeOriginal, 80),
+          assessments: asArray(record.retrieval.assessments).map((assessment) => cleanString(assessment, 120)).filter(Boolean).slice(0, 12)
+        }
+      } : {}),
       collection: cleanString(record.collection || source.name, 180)
     },
     media: {
@@ -146,6 +159,7 @@ export function createUniversalContentObject(record, options = {}) {
       quality: numberBetween(record.ranking?.quality, 0, 1, source.quality.metadataCompleteness),
       relevanceSignals: {
         explicitTopicMatch: topics.length ? 1 : 0,
+        retrievalScore: numberBetween(record.ranking?.retrievalScore, 0, 1, 0),
         sourceConfidence: source.quality.rightsConfidence,
         metadataCompleteness: source.quality.metadataCompleteness
       },

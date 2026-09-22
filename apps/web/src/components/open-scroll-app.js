@@ -99,16 +99,63 @@ function createFeedSeed() {
   return Math.floor(Math.random() * 0x100000000);
 }
 
+async function readFeedResponse(response, onProgress) {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.message || payload?.error || "The open feed could not be built.");
+  }
+
+  if (!response.body || !response.headers.get("content-type")?.includes("application/x-ndjson")) {
+    return response.json();
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = null;
+
+  const consumeLine = (line) => {
+    if (!line.trim()) return;
+    const payload = JSON.parse(line);
+    if (payload.type === "progress") {
+      onProgress(payload);
+    } else if (payload.type === "result") {
+      result = payload.payload;
+    } else if (payload.type === "error") {
+      throw new Error(payload.error || "The open feed could not be built.");
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    lines.forEach(consumeLine);
+    if (done) break;
+  }
+  consumeLine(buffer);
+
+  if (!result) throw new Error("The open feed ended before returning results.");
+  return result;
+}
+
 export default function OpenScrollApp() {
   // Navigation: "explore" | "search" | "feed" | "scrolls" | "saved" | "settings"
   const [currentView, setCurrentView] = useState("search");
   const [interest, setInterest] = useState("");
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
+  const [feedLoadingStage, setFeedLoadingStage] = useState({
+    phase: "planning",
+    label: "Understanding your search",
+    detail: "Preparing focused searches"
+  });
 
   const [cards, setCards] = useState(INITIAL_CARDS);
   const [feedCursor, setFeedCursor] = useState(0);
   const [feedSeed, setFeedSeed] = useState(null);
   const [feedSourceOffsets, setFeedSourceOffsets] = useState({});
+  const [feedSearchPlan, setFeedSearchPlan] = useState(null);
   const [feedExhausted, setFeedExhausted] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [feedMediaTypes, setFeedMediaTypes] = useState(MEDIA_TYPE_KEYS);
@@ -265,18 +312,24 @@ export default function OpenScrollApp() {
 
     const nextSeed = createFeedSeed();
     setIsLoadingFeed(true);
+    setFeedLoadingStage({
+      phase: "planning",
+      label: "Understanding your search",
+      detail: "Preparing focused searches"
+    });
     setCurrentView("feed");
     setCards([]);
     setFeedMediaTypes(selectedMediaTypes);
     setFeedSeed(nextSeed);
     setFeedCursor(null);
     setFeedSourceOffsets({});
+    setFeedSearchPlan(null);
     setFeedExhausted(false);
 
     try {
       const res = await fetch("/api/feed/compose", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
         body: JSON.stringify({
           interest: cleanInterest,
           feedback: localState.feedback,
@@ -286,12 +339,10 @@ export default function OpenScrollApp() {
         })
       });
 
-      const payload = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(payload?.message || payload?.error || "The Wikimedia Commons feed could not be built.");
-      }
+      const payload = await readFeedResponse(res, setFeedLoadingStage);
 
       const composedItems = payload?.data?.items || [];
+      setFeedSearchPlan(payload?.data?.searchPlan || null);
       if (!composedItems.length) {
         setCards([]);
         setFeedCursor(null);
@@ -313,6 +364,7 @@ export default function OpenScrollApp() {
       setToast(error.message);
     } finally {
       setIsLoadingFeed(false);
+      setFeedLoadingStage(null);
     }
   }
 
@@ -320,6 +372,11 @@ export default function OpenScrollApp() {
   async function handleLoadMoreCards() {
     if (isLoadingFeed || isLoadingMore || currentView !== "feed" || (feedCursor === null && feedExhausted)) return;
     setIsLoadingMore(true);
+    setFeedLoadingStage({
+      phase: "retrieving",
+      label: "Searching Wikimedia Commons",
+      detail: "Looking for the next focused batch"
+    });
 
     try {
       const requestingNextSourceBatch = feedCursor === null;
@@ -328,7 +385,7 @@ export default function OpenScrollApp() {
 
       const res = await fetch("/api/feed/compose", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
         body: JSON.stringify({
           interest: cleanInterest,
           feedback: localState.feedback,
@@ -336,14 +393,12 @@ export default function OpenScrollApp() {
           pageSize: 25,
           seed: feedSeed,
           sourceOffsets: feedSourceOffsets,
-          mediaTypes: feedMediaTypes
+          mediaTypes: feedMediaTypes,
+          searchPlan: feedSearchPlan
         })
       });
 
-      const payload = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(payload?.message || payload?.error || "The Wikimedia Commons feed could not be extended.");
-      }
+      const payload = await readFeedResponse(res, setFeedLoadingStage);
 
       const nextItems = payload?.data?.items || [];
       setFeedSourceOffsets(payload?.data?.sourceOffsets || {});
@@ -364,6 +419,7 @@ export default function OpenScrollApp() {
       setToast(error.message);
     } finally {
       setIsLoadingMore(false);
+      setFeedLoadingStage(null);
     }
   }
 
@@ -585,8 +641,11 @@ export default function OpenScrollApp() {
             <div ref={bottomSentinelRef} className="infinite-stream-sentinel" aria-live="polite">
               {isLoadingFeed || isLoadingMore ? (
                 <div className="infinite-stream-loader">
-                  <Sparkles className="icon-sm spin" aria-hidden="true" />
-                  <span>Loading more from the open feed...</span>
+                  <div className="infinite-stream-loader__main">
+                    <Sparkles className="icon-sm spin" aria-hidden="true" />
+                    <span>{feedLoadingStage?.label || "Loading from the open feed"}</span>
+                  </div>
+                  {feedLoadingStage?.detail ? <span className="infinite-stream-loader__detail">{feedLoadingStage.detail}</span> : null}
                 </div>
               ) : feedExhausted ? (
                 <div className="infinite-stream-loader infinite-stream-loader--subtle">

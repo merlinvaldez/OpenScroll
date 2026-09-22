@@ -7,6 +7,8 @@ export { SOURCE_HEALTH, SOURCE_REGISTRY, SOURCE_REGISTRY_VERSION, createSourceRe
 export { EPIC_C_CONNECTORS, culturalAggregatorsConnector, openverseConnector, wikimediaCommonsConnector, wikimediaKnowledgeConnector, queryLiveConnectors, searchWikipediaLive, fetchWikipediaArticleLive, searchCommonsLive, searchMetMuseumLive } from "./source-connectors.js";
 export { expandTopics, resolveEntity, evaluateFeedCandidates, buildQueryPlan } from "./topic-engine.js";
 export { composeDiversityFeed, deduplicateCandidates, scoreCandidate } from "./feed-composer.js";
+export { buildCommonsSearchPlan, buildSearchPlans } from "./search-planner.js";
+export { composeSearchFeed, FEED_MEDIA_TYPE_KINDS, FEED_MEDIA_TYPE_SOURCES } from "./feed-search.js";
 
 import { createUniversalContentObject } from "./content-object.js";
 import { EPIC_C_RAW_ITEMS } from "./fixtures.js";

@@ -194,6 +194,34 @@ function classifyCommonsMediaKind(mime = "", mediaUrl = "", mediatype = "") {
   return "image";
 }
 
+function metadataText(value, maxLength = 500) {
+  return cleanString(typeof value === "string" ? value.replace(/<[^>]*>/g, "") : "", maxLength);
+}
+
+function metadataList(value, maxItems = 20) {
+  return metadataText(value, 2000)
+    .split("|")
+    .map((item) => cleanString(item, 120))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function retrievalScore(query, title, description, categories) {
+  const queryTerms = cleanString(query, 120)
+    .replace(/(?:intitle:|filetype:|incategory:)/gi, " ")
+    .replace(/["()]/g, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((term) => term.length > 2);
+  if (!queryTerms.length) return 0.5;
+
+  const titleText = title.toLowerCase();
+  const searchableText = `${title} ${description} ${categories.join(" ")}`.toLowerCase();
+  const matchedTerms = queryTerms.filter((term) => searchableText.includes(term));
+  const titleMatches = queryTerms.filter((term) => titleText.includes(term));
+  return Math.min(1, 0.45 + (matchedTerms.length / queryTerms.length) * 0.35 + (titleMatches.length / queryTerms.length) * 0.2);
+}
+
 export async function searchCommonsLive(query, limit = 12, options = {}) {
   const mediaTypeFilter = COMMONS_MEDIA_TYPE_FILTERS[options.mediaType] || "";
   const searchQuery = [cleanString(query, 100), mediaTypeFilter].filter(Boolean).join(" ");
@@ -220,6 +248,8 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
     if (options.mediaType && kind !== options.mediaType) continue;
 
     const title = page.title.replace(/^File:/, "").replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    const categories = metadataList(meta.Categories?.value);
+    const retrievalMatch = retrievalScore(query, title, desc, categories);
 
     const ucoItem = {
       id: `wikimedia-commons:${page.pageid}`,
@@ -231,7 +261,18 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
       title: cleanString(title, 90),
       description: desc,
       language: "en",
-      topics: [query],
+      topics: [],
+      retrieval: {
+        originalQuery: cleanString(options.originalQuery || query, 120),
+        query: cleanString(query, 120),
+        strategy: cleanString(options.searchContext?.strategy, 80),
+        variantKey: cleanString(options.searchContext?.variantKey, 80),
+        entity: cleanString(options.searchContext?.entity?.label, 160),
+        categories,
+        objectName: metadataText(meta.ObjectName?.value, 180),
+        dateTimeOriginal: metadataText(meta.DateTimeOriginal?.value, 80),
+        assessments: metadataList(meta.Assessments?.value, 12)
+      },
       creators: [{ name: artist, role: "creator" }],
       content: {
         type: kind,
@@ -266,7 +307,8 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
         upstreamLicense: rawLicense
       },
       ranking: {
-        quality: 0.9,
+        quality: 0.75 + retrievalMatch * 0.2,
+        retrievalScore: retrievalMatch,
         curationTier: "featured"
       }
     };
@@ -367,7 +409,12 @@ export async function queryLiveConnectors(query, options = {}) {
     requests.push(searchWikipediaLive(query, explicitLimit ?? 6, { offset: options.offset }).catch(() => []));
   }
   if (sources.includes("wikimedia-commons")) {
-    requests.push(searchCommonsLive(query, explicitLimit ?? 12, { offset: options.offset, mediaType: options.mediaType }).catch(() => []));
+    requests.push(searchCommonsLive(query, explicitLimit ?? 12, {
+      offset: options.offset,
+      mediaType: options.mediaType,
+      originalQuery: options.originalQuery,
+      searchContext: options.searchContext
+    }).catch(() => []));
   }
   if (sources.includes("met")) {
     requests.push(searchMetMuseumLive(query, explicitLimit ?? 6).catch(() => []));
