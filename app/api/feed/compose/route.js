@@ -1,6 +1,10 @@
 import { composeSearchFeed } from "@openscroll/content";
 import { NextResponse } from "next/server";
 
+function onMetrics(metrics) {
+  if (process.env.FEED_METRICS_LOG === "1") console.info(JSON.stringify({ event: "feed.metrics", ...metrics }));
+}
+
 function streamResponse(body) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -8,7 +12,7 @@ function streamResponse(body) {
       const send = (payload) => controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
       Promise.resolve().then(async () => {
         try {
-          const data = await composeSearchFeed(body, { onProgress: (progress) => send({ type: "progress", ...progress }) });
+          const data = await composeSearchFeed(body, { onMetrics, onProgress: (progress) => send({ type: "progress", ...progress }) });
           send({ type: "result", payload: { version: "1", requestId: crypto.randomUUID(), data } });
         } catch (error) {
           send({ type: "error", error: error.message, status: error.status || 500 });
@@ -32,7 +36,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     if (request.headers.get("accept")?.includes("application/x-ndjson")) return streamResponse(body);
-    const data = await composeSearchFeed(body);
+    const data = await composeSearchFeed(body, { onMetrics });
     return NextResponse.json({ version: "1", requestId: crypto.randomUUID(), data });
   } catch (error) {
     return NextResponse.json(

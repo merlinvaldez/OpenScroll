@@ -16,6 +16,7 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
   const previousModel = process.env.OPENAI_MODEL;
   const requests = [];
   const phases = [];
+  let metrics;
   process.env.OPENAI_API_KEY = "test-key";
   process.env.OPENAI_MODEL = "test-model";
 
@@ -71,7 +72,8 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
 
   try {
     const result = await composeSearchFeed({ interest: "Gnawa music Morocco", mediaTypes: ["images"], pageSize: 5, seed: 1 }, {
-      onProgress: (progress) => phases.push(progress.phase)
+      onProgress: (progress) => phases.push(progress.phase),
+      onMetrics: (value) => { metrics = value; }
     });
 
     assert.ok(requests.filter((request) => request.url === "https://api.openai.com/v1/chat/completions").length >= 2);
@@ -80,6 +82,27 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
     assert.deepEqual([...new Set(phases)], ["planning", "retrieving", "evaluating", "composing"]);
     assert.equal(result.items[0].knowledge.retrieval.categories[0], "Gnawa");
     assert.equal(result.items[0].knowledge.topics[0], "Gnawa");
+    assert.equal(metrics.status, "ok");
+    assert.equal(metrics.counters.aiCalls, 2);
+    assert.equal(metrics.counters.sourceCalls, result.searchPlan.variants.images.length);
+    assert.equal(metrics.counters.rawResults, metrics.counters.sourceCalls * 2);
+    assert.equal(metrics.counters.normalizedCandidates, metrics.counters.rawResults);
+    assert.equal(metrics.counters.duplicates, metrics.counters.rawResults - 2);
+    assert.equal(metrics.counters.accepted, 2);
+    assert.equal(metrics.counters.visible, result.items.length);
+    assert.equal(metrics.counters.sourceFailures, 0);
+    assert.equal(metrics.estimatedCostUsd, null);
+    assert.ok(metrics.fullPageMs >= Object.values(metrics.phasesMs).reduce((a, b) => a + b, 0) - 0.1);
+    assert.equal(Object.hasOwn(result, "metrics"), false);
+    let reusedMetrics;
+    const repeated = await composeSearchFeed({ interest: "Gnawa music Morocco", mediaTypes: ["images"], pageSize: 1, seed: 1, searchPlan: result.searchPlan }, {
+      onMetrics: (value) => { reusedMetrics = value; },
+      onCandidates: () => { throw new Error("diagnostic callback failed"); }
+    });
+    assert.equal(repeated.items.length, 1);
+    assert.equal(reusedMetrics.counters.planReuses, 1);
+    assert.equal(reusedMetrics.counters.aiCalls, 1);
+    assert.equal(reusedMetrics.counters.pending, 1);
   } finally {
     globalThis.fetch = originalFetch;
     if (previousKey === undefined) delete process.env.OPENAI_API_KEY;

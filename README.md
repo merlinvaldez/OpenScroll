@@ -21,4 +21,6 @@ npm run test:a11y
 
 Environment separation is documented in `docs/ENVIRONMENTS.md`; manual accessibility verification is in `docs/ACCESSIBILITY_TEST_PLAN.md`.
 
+Feed measurements, captured baseline evidence, numerical release targets, and repeatable benchmark commands are in [benchmarks/feed/README.md](benchmarks/feed/README.md). Set server-side `FEED_METRICS_LOG=1` to log aggregate request diagnostics without search text or credentials.
+
 Topic expansion and entity resolution use OpenAI exclusively. OpenAI generates both the query-specific category taxonomy and the topics inside each category; the app no longer supplies a static category list. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in the local environment; there is no local, Wikipedia, or curated fallback when OpenAI fails.

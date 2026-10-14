@@ -31,6 +31,15 @@ function getOpenAIConfig(options = {}) {
 }
 
 async function requestOpenAIJson(messages, options = {}) {
+  try {
+    return await requestOpenAIJsonMeasured(messages, options);
+  } catch (error) {
+    options.metrics?.increment("aiFailures");
+    throw error;
+  }
+}
+
+async function requestOpenAIJsonMeasured(messages, options = {}) {
   const { apiKey, model } = getOpenAIConfig(options);
 
   if (typeof fetch !== "function") {
@@ -39,6 +48,7 @@ async function requestOpenAIJson(messages, options = {}) {
 
   let response;
   try {
+    options.metrics?.increment("aiCalls");
     response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -66,6 +76,7 @@ async function requestOpenAIJson(messages, options = {}) {
     const message = payload?.error?.message || `OpenAI request failed (${response.status}).`;
     throw new OpenAIRequestError(message, response.status);
   }
+  options.metrics?.addUsage(payload, model);
 
   const raw = payload?.choices?.[0]?.message?.content;
   if (typeof raw !== "string" || !raw.trim()) {

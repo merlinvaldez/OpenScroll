@@ -8,7 +8,8 @@ import { EPIC_C_RAW_ITEMS } from "./fixtures.js";
 const USER_AGENT = "OpenScroll/1.0 (https://github.com/merlinvaldez/OpenScroll; open-knowledge-client)";
 
 // Helper: safe fetch with timeout
-async function safeFetch(url, options = {}, timeoutMs = 6000) {
+async function safeFetch(url, options = {}, timeoutMs = 6000, metrics) {
+  metrics?.increment("sourceCalls");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -22,10 +23,13 @@ async function safeFetch(url, options = {}, timeoutMs = 6000) {
       }
     });
     clearTimeout(timeout);
-    if (!res.ok) return null;
-    return await res.json();
+    if (!res.ok) { metrics?.increment("sourceFailures"); return null; }
+    const data = await res.json();
+    if (data?.error) metrics?.increment("sourceFailures");
+    return data;
   } catch {
     clearTimeout(timeout);
+    metrics?.increment("sourceFailures");
     return null;
   }
 }
@@ -100,14 +104,15 @@ export async function searchWikipediaLive(query, limit = 8, options = {}) {
   const offsetQuery = offset ? `&sroffset=${offset}` : "";
   const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${cleanQ}&format=json&srlimit=${limit}${offsetQuery}&origin=*`;
   
-  const searchData = await safeFetch(searchUrl);
+  const searchData = await safeFetch(searchUrl, {}, 6000, options.metrics);
   if (!searchData?.query?.search) return [];
+  options.metrics?.increment("rawResults", searchData.query.search.length);
 
   const results = [];
   for (const item of searchData.query.search) {
     const title = item.title;
     const pageUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-    const pageData = await safeFetch(pageUrl);
+    const pageData = await safeFetch(pageUrl, {}, 6000, options.metrics);
 
     if (pageData && pageData.type === "standard") {
       results.push(createWikipediaRecord(pageData));
@@ -230,8 +235,9 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
   const offsetQuery = offset ? `&gsroffset=${offset}` : "";
   const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiurlwidth=640&format=json&origin=*`;
 
-  const data = await safeFetch(url);
+  const data = await safeFetch(url, {}, 6000, options.metrics);
   if (!data?.query?.pages) return [];
+  options.metrics?.increment("rawResults", Object.keys(data.query.pages).length);
 
   const results = [];
   for (const page of Object.values(data.query.pages)) {
@@ -406,14 +412,15 @@ export async function queryLiveConnectors(query, options = {}) {
   const requests = [];
 
   if (sources.includes("wikipedia")) {
-    requests.push(searchWikipediaLive(query, explicitLimit ?? 6, { offset: options.offset }).catch(() => []));
+    requests.push(searchWikipediaLive(query, explicitLimit ?? 6, { offset: options.offset, metrics: options.metrics }).catch(() => []));
   }
   if (sources.includes("wikimedia-commons")) {
     requests.push(searchCommonsLive(query, explicitLimit ?? 12, {
       offset: options.offset,
       mediaType: options.mediaType,
       originalQuery: options.originalQuery,
-      searchContext: options.searchContext
+      searchContext: options.searchContext,
+      metrics: options.metrics
     }).catch(() => []));
   }
   if (sources.includes("met")) {
@@ -425,8 +432,11 @@ export async function queryLiveConnectors(query, options = {}) {
   if (liveCandidates.length > 0) {
     return liveCandidates.map((raw) => {
       try {
-        return createUniversalContentObject(raw);
+        const candidate = createUniversalContentObject(raw);
+        options.metrics?.increment("normalizedCandidates");
+        return candidate;
       } catch {
+        options.metrics?.increment("normalizationFailures");
         return raw;
       }
     });

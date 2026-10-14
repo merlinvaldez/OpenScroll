@@ -1,0 +1,839 @@
+{
+  "version": "feed-baseline.v1",
+  "capturedAt": "2026-10-14T19:04:03.948Z",
+  "gitHead": "ea1aa1fc417343669f26f1f9bc75b1ca7a4fc713",
+  "model": "gpt-5.6-luna",
+  "mode": "live",
+  "timeoutMs": 30000,
+  "repetitions": 2,
+  "runs": [
+    {
+      "caseId": "precise",
+      "temperature": "first",
+      "repetition": 1,
+      "error": {
+        "name": "OpenAIRequestError",
+        "status": 502,
+        "deadlineExceeded": true
+      },
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "error",
+        "phasesMs": {
+          "planning": 3573.77,
+          "retrieval": 5626.32,
+          "evaluation": 20811.77,
+          "composition": 0
+        },
+        "fullPageMs": 30014.41,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 50,
+          "sourceFailures": 1,
+          "rawResults": 75,
+          "normalizedCandidates": 74,
+          "normalizationFailures": 0,
+          "duplicates": 19,
+          "invalidCandidates": 0,
+          "evaluated": 29,
+          "accepted": 14,
+          "rejected": 15,
+          "retained": 14,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 2,
+          "aiCalls": 3,
+          "aiFailures": 1,
+          "pipelineFailures": 1,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 3817,
+          "completionTokens": 2474,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": null,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "precise",
+      "temperature": "repeat",
+      "repetition": 2,
+      "error": {
+        "name": "OpenAIRequestError",
+        "status": 502,
+        "deadlineExceeded": true
+      },
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "error",
+        "phasesMs": {
+          "planning": 2887.81,
+          "retrieval": 2450.28,
+          "evaluation": 24676.71,
+          "composition": 0
+        },
+        "fullPageMs": 30015.67,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 50,
+          "sourceFailures": 0,
+          "rawResults": 77,
+          "normalizedCandidates": 77,
+          "normalizationFailures": 0,
+          "duplicates": 29,
+          "invalidCandidates": 0,
+          "evaluated": 26,
+          "accepted": 13,
+          "rejected": 13,
+          "retained": 13,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 2,
+          "aiCalls": 3,
+          "aiFailures": 1,
+          "pipelineFailures": 1,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 3213,
+          "completionTokens": 2366,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": null,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "broad",
+      "temperature": "first",
+      "repetition": 1,
+      "visibleIds": [
+        "uco:wikipedia:25784",
+        "uco:wikimedia-commons:109680304",
+        "uco:wikipedia:10034125",
+        "uco:wikipedia:17068576",
+        "uco:wikimedia-commons:91649581",
+        "uco:wikipedia:28560454",
+        "uco:wikipedia:23127931",
+        "uco:wikimedia-commons:63265055",
+        "uco:wikipedia:51684387",
+        "uco:wikimedia-commons:126617488",
+        "uco:wikipedia:10418624",
+        "uco:wikimedia-commons:193877254",
+        "uco:wikipedia:10929036",
+        "uco:wikimedia-commons:126617483",
+        "uco:wikimedia-commons:108852817",
+        "uco:wikipedia:18160509",
+        "uco:wikimedia-commons:27576124",
+        "uco:wikipedia:13556279",
+        "uco:wikimedia-commons:194190529",
+        "uco:wikimedia-commons:126617484",
+        "uco:wikipedia:24005167",
+        "uco:wikimedia-commons:71842520",
+        "uco:wikipedia:34578727",
+        "uco:wikimedia-commons:134415812",
+        "uco:wikimedia-commons:108852367"
+      ],
+      "sourceHasMore": true,
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "ok",
+        "phasesMs": {
+          "planning": 2935.93,
+          "retrieval": 878.07,
+          "evaluation": 15143.9,
+          "composition": 1.5
+        },
+        "fullPageMs": 18960.85,
+        "firstCardReadyMs": 18960.85,
+        "counters": {
+          "sourceCalls": 28,
+          "sourceFailures": 0,
+          "rawResults": 40,
+          "normalizedCandidates": 39,
+          "normalizationFailures": 0,
+          "duplicates": 10,
+          "invalidCandidates": 0,
+          "evaluated": 29,
+          "accepted": 25,
+          "rejected": 4,
+          "retained": 25,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 25,
+          "rounds": 1,
+          "aiCalls": 2,
+          "aiFailures": 0,
+          "pipelineFailures": 0,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 3517,
+          "completionTokens": 1798,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": 0.002861,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "broad",
+      "temperature": "repeat",
+      "repetition": 2,
+      "error": {
+        "name": "OpenAIRequestError",
+        "status": 502,
+        "deadlineExceeded": true
+      },
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "error",
+        "phasesMs": {
+          "planning": 1895.68,
+          "retrieval": 2006.31,
+          "evaluation": 26130.85,
+          "composition": 0
+        },
+        "fullPageMs": 30033.27,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 56,
+          "sourceFailures": 0,
+          "rawResults": 80,
+          "normalizedCandidates": 80,
+          "normalizationFailures": 0,
+          "duplicates": 11,
+          "invalidCandidates": 0,
+          "evaluated": 35,
+          "accepted": 21,
+          "rejected": 14,
+          "retained": 21,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 2,
+          "aiCalls": 3,
+          "aiFailures": 1,
+          "pipelineFailures": 1,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 4127,
+          "completionTokens": 2365,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": null,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "ambiguous",
+      "temperature": "first",
+      "repetition": 1,
+      "error": {
+        "name": "OpenAIRequestError",
+        "status": 502,
+        "deadlineExceeded": true
+      },
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "error",
+        "phasesMs": {
+          "planning": 2819.62,
+          "retrieval": 4720.19,
+          "evaluation": 22475.76,
+          "composition": 0
+        },
+        "fullPageMs": 30015.92,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 56,
+          "sourceFailures": 0,
+          "rawResults": 80,
+          "normalizedCandidates": 79,
+          "normalizationFailures": 0,
+          "duplicates": 42,
+          "invalidCandidates": 0,
+          "evaluated": 23,
+          "accepted": 22,
+          "rejected": 1,
+          "retained": 22,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 2,
+          "aiCalls": 3,
+          "aiFailures": 1,
+          "pipelineFailures": 1,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 2858,
+          "completionTokens": 1964,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": null,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "ambiguous",
+      "temperature": "repeat",
+      "repetition": 2,
+      "visibleIds": [
+        "uco:wikipedia:23911902",
+        "uco:wikimedia-commons:100019",
+        "uco:wikipedia:16217",
+        "uco:wikimedia-commons:59455008",
+        "uco:wikipedia:885672",
+        "uco:wikimedia-commons:44247651",
+        "uco:wikipedia:49962035",
+        "uco:wikimedia-commons:169906708",
+        "uco:wikipedia:657874",
+        "uco:wikimedia-commons:44247571",
+        "uco:wikipedia:496975",
+        "uco:wikimedia-commons:121629671",
+        "uco:wikipedia:147676",
+        "uco:wikimedia-commons:169905844",
+        "uco:wikipedia:1118425",
+        "uco:wikimedia-commons:87748243",
+        "uco:wikipedia:18643465",
+        "uco:wikimedia-commons:1284882",
+        "uco:wikipedia:176232",
+        "uco:wikimedia-commons:169906347",
+        "uco:wikipedia:23970639",
+        "uco:wikimedia-commons:44247575",
+        "uco:wikipedia:5795407",
+        "uco:wikimedia-commons:41882238",
+        "uco:wikimedia-commons:134924772"
+      ],
+      "sourceHasMore": true,
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "ok",
+        "phasesMs": {
+          "planning": 2484.29,
+          "retrieval": 1038.45,
+          "evaluation": 21177.61,
+          "composition": 0.3
+        },
+        "fullPageMs": 24701.19,
+        "firstCardReadyMs": 24701.19,
+        "counters": {
+          "sourceCalls": 56,
+          "sourceFailures": 0,
+          "rawResults": 80,
+          "normalizedCandidates": 79,
+          "normalizationFailures": 0,
+          "duplicates": 41,
+          "invalidCandidates": 0,
+          "evaluated": 38,
+          "accepted": 31,
+          "rejected": 7,
+          "retained": 25,
+          "droppedAccepted": 6,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 25,
+          "rounds": 2,
+          "aiCalls": 3,
+          "aiFailures": 0,
+          "pipelineFailures": 0,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 4580,
+          "completionTokens": 2542,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 3
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": 0.0039664,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "spanish",
+      "temperature": "first",
+      "repetition": 1,
+      "visibleIds": [
+        "uco:wikimedia-commons:145103563",
+        "uco:wikimedia-commons:4735313",
+        "uco:wikimedia-commons:53738970",
+        "uco:wikimedia-commons:153178856",
+        "uco:wikimedia-commons:145103559",
+        "uco:wikimedia-commons:32164002",
+        "uco:wikimedia-commons:145103565",
+        "uco:wikimedia-commons:94835943",
+        "uco:wikimedia-commons:145103555",
+        "uco:wikimedia-commons:86618057",
+        "uco:wikimedia-commons:145103549",
+        "uco:wikimedia-commons:87248980",
+        "uco:wikimedia-commons:163034292",
+        "uco:wikimedia-commons:76499057",
+        "uco:wikimedia-commons:187578175",
+        "uco:wikimedia-commons:145103550",
+        "uco:wikimedia-commons:76499056",
+        "uco:wikimedia-commons:53738971",
+        "uco:wikimedia-commons:140734182",
+        "uco:wikimedia-commons:130011980",
+        "uco:wikimedia-commons:145103551",
+        "uco:wikimedia-commons:145103546",
+        "uco:wikimedia-commons:145103548",
+        "uco:wikimedia-commons:85846112",
+        "uco:wikimedia-commons:145103553"
+      ],
+      "sourceHasMore": true,
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "ok",
+        "phasesMs": {
+          "planning": 2514.63,
+          "retrieval": 1951.51,
+          "evaluation": 22372.64,
+          "composition": 0.35
+        },
+        "fullPageMs": 26839.9,
+        "firstCardReadyMs": 26839.9,
+        "counters": {
+          "sourceCalls": 17,
+          "sourceFailures": 0,
+          "rawResults": 68,
+          "normalizedCandidates": 68,
+          "normalizationFailures": 0,
+          "duplicates": 37,
+          "invalidCandidates": 0,
+          "evaluated": 31,
+          "accepted": 26,
+          "rejected": 5,
+          "retained": 25,
+          "droppedAccepted": 1,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 25,
+          "rounds": 4,
+          "aiCalls": 5,
+          "aiFailures": 0,
+          "pipelineFailures": 0,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 5071,
+          "completionTokens": 2408,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 5
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": 0.0039038000000000002,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "spanish",
+      "temperature": "repeat",
+      "repetition": 2,
+      "error": {
+        "name": "OpenAIRequestError",
+        "status": 502,
+        "deadlineExceeded": true
+      },
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "error",
+        "phasesMs": {
+          "planning": 2563.81,
+          "retrieval": 1764.96,
+          "evaluation": 25685.35,
+          "composition": 0
+        },
+        "fullPageMs": 30014.87,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 14,
+          "sourceFailures": 0,
+          "rawResults": 51,
+          "normalizedCandidates": 51,
+          "normalizationFailures": 0,
+          "duplicates": 13,
+          "invalidCandidates": 0,
+          "evaluated": 27,
+          "accepted": 18,
+          "rejected": 9,
+          "retained": 18,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 3,
+          "aiCalls": 4,
+          "aiFailures": 1,
+          "pipelineFailures": 1,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 4548,
+          "completionTokens": 2362,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 3
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": null,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "arabic",
+      "temperature": "first",
+      "repetition": 1,
+      "visibleIds": [
+        "uco:wikipedia:1823934"
+      ],
+      "sourceHasMore": false,
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "ok",
+        "phasesMs": {
+          "planning": 4055.74,
+          "retrieval": 1178.69,
+          "evaluation": 3948.02,
+          "composition": 0.06
+        },
+        "fullPageMs": 9182.84,
+        "firstCardReadyMs": 9182.84,
+        "counters": {
+          "sourceCalls": 10,
+          "sourceFailures": 0,
+          "rawResults": 6,
+          "normalizedCandidates": 6,
+          "normalizationFailures": 0,
+          "duplicates": 2,
+          "invalidCandidates": 0,
+          "evaluated": 4,
+          "accepted": 1,
+          "rejected": 3,
+          "retained": 1,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 1,
+          "rounds": 1,
+          "aiCalls": 2,
+          "aiFailures": 0,
+          "pipelineFailures": 0,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 761,
+          "completionTokens": 582,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": 0.0008506000000000001,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "arabic",
+      "temperature": "repeat",
+      "repetition": 2,
+      "error": {
+        "name": "OpenAIRequestError",
+        "status": 502,
+        "deadlineExceeded": true
+      },
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "error",
+        "phasesMs": {
+          "planning": 3555.67,
+          "retrieval": 2956.5,
+          "evaluation": 23495.12,
+          "composition": 0
+        },
+        "fullPageMs": 30007.68,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 55,
+          "sourceFailures": 0,
+          "rawResults": 47,
+          "normalizedCandidates": 47,
+          "normalizationFailures": 0,
+          "duplicates": 17,
+          "invalidCandidates": 0,
+          "evaluated": 21,
+          "accepted": 5,
+          "rejected": 16,
+          "retained": 5,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 4,
+          "aiCalls": 5,
+          "aiFailures": 1,
+          "pipelineFailures": 1,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 2057,
+          "completionTokens": 1891,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 4
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": null,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "sparse-video",
+      "temperature": "first",
+      "repetition": 1,
+      "visibleIds": [],
+      "sourceHasMore": false,
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "ok",
+        "phasesMs": {
+          "planning": 3144.44,
+          "retrieval": 457.83,
+          "evaluation": 0,
+          "composition": 0.07
+        },
+        "fullPageMs": 3602.5,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 4,
+          "sourceFailures": 0,
+          "rawResults": 0,
+          "normalizedCandidates": 0,
+          "normalizationFailures": 0,
+          "duplicates": 0,
+          "invalidCandidates": 0,
+          "evaluated": 0,
+          "accepted": 0,
+          "rejected": 0,
+          "retained": 0,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 1,
+          "aiCalls": 1,
+          "aiFailures": 0,
+          "pipelineFailures": 0,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 89,
+          "completionTokens": 192,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 1
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": 0.0002482,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    },
+    {
+      "caseId": "sparse-video",
+      "temperature": "repeat",
+      "repetition": 2,
+      "visibleIds": [],
+      "sourceHasMore": false,
+      "metrics": {
+        "version": "feed-metrics.v1",
+        "status": "ok",
+        "phasesMs": {
+          "planning": 3766.6,
+          "retrieval": 628.8,
+          "evaluation": 2950.25,
+          "composition": 0.04
+        },
+        "fullPageMs": 7345.81,
+        "firstCardReadyMs": null,
+        "counters": {
+          "sourceCalls": 4,
+          "sourceFailures": 0,
+          "rawResults": 6,
+          "normalizedCandidates": 6,
+          "normalizationFailures": 0,
+          "duplicates": 4,
+          "invalidCandidates": 0,
+          "evaluated": 2,
+          "accepted": 0,
+          "rejected": 2,
+          "retained": 0,
+          "droppedAccepted": 0,
+          "pending": 0,
+          "compositionExcluded": 0,
+          "visible": 0,
+          "rounds": 1,
+          "aiCalls": 2,
+          "aiFailures": 0,
+          "pipelineFailures": 0,
+          "cacheHits": 0,
+          "planReuses": 0
+        },
+        "usage": {
+          "promptTokens": 524,
+          "completionTokens": 470,
+          "cachedPromptTokens": 0,
+          "responsesWithUsage": 2
+        },
+        "models": [
+          "gpt-5.6-luna"
+        ],
+        "estimatedCostUsd": 0.0006688,
+        "notes": {
+          "firstCard": "Backend readiness, not browser paint; current feed delivers cards only at completion.",
+          "pending": "Accepted items left in the composed pool; overflow dropped by current retrieval is counted separately.",
+          "cache": "No application cache exists; plan reuse and provider cached tokens are separate counters.",
+          "cost": "Unknown without an explicitly supplied model price; tokens are recorded when provided."
+        }
+      }
+    }
+  ],
+  "summary": {
+    "first": {
+      "attempts": 6,
+      "successful": 4,
+      "withCards": 3,
+      "medianFullPageMs": 14071.845,
+      "p95FullPageMs": 26839.9,
+      "medianFirstCardReadyMs": 18960.85,
+      "p95FirstCardReadyMs": 26839.9,
+      "medianSourceCalls": 13.5,
+      "medianAiCalls": 2,
+      "medianEvaluationMs": 9545.96
+    },
+    "repeat": {
+      "attempts": 6,
+      "successful": 2,
+      "withCards": 1,
+      "medianFullPageMs": 16023.5,
+      "p95FullPageMs": 24701.19,
+      "medianFirstCardReadyMs": 24701.19,
+      "p95FirstCardReadyMs": 24701.19,
+      "medianSourceCalls": 30,
+      "medianAiCalls": 2.5,
+      "medianEvaluationMs": 12063.93
+    }
+  },
+  "limitations": [
+    "First/repeat are cold-like/warm-like cohorts, not forced provider cache states; no application cache exists.",
+    "Small samples: nearest-rank p95 is descriptive, not a statistically reliable production tail.",
+    "Direct backend timing excludes HTTP transport, browser decoding and paint.",
+    "Frozen mode measures only evaluator latency and consistency on synthetic unlabelled candidates, not relevance accuracy or full-feed latency.",
+    "Costs remain unknown unless complete token usage and an explicit model price schedule are supplied."
+  ],
+  "ratesSource": "benchmarks/feed/standard-prices-2026-10-14.json"
+}

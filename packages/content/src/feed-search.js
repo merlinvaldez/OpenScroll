@@ -2,6 +2,7 @@ import { composeDiversityFeed } from "./feed-composer.js";
 import { resolveEntity, evaluateFeedCandidates } from "./topic-engine.js";
 import { queryLiveConnectors } from "./source-connectors.js";
 import { buildSearchPlans } from "./search-planner.js";
+import { createFeedMetrics, reportFeedMetrics } from "./feed-metrics.js";
 
 export const FEED_MEDIA_TYPE_KINDS = Object.freeze({ images: "image", audio: "audio", video: "video", text: "text", data: "data" });
 export const FEED_MEDIA_TYPE_SOURCES = Object.freeze({ images: ["wikimedia-commons"], audio: ["wikimedia-commons"], video: ["wikimedia-commons"], text: ["wikipedia"], data: ["wikimedia-commons"] });
@@ -67,7 +68,7 @@ function progress(onProgress, payload) {
   if (typeof onProgress === "function") onProgress(payload);
 }
 
-async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets, onProgress }) {
+async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets, onProgress, metrics }) {
   const passingByMediaType = new Map(mediaTypes.map((mediaType) => [mediaType, []]));
   const nextOffsets = normalizeStartOffsets(startOffsets, plans);
   const exhaustedPairs = new Set();
@@ -80,6 +81,7 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
   for (let round = 0; round < MAX_REQUERY_ROUNDS && passingCount() < PASSING_RESULTS_PER_BATCH; round += 1) {
     const activePairs = pairs.filter(({ mediaType, variant }) => !exhaustedPairs.has(`${mediaType}:${variant.key}`));
     if (!activePairs.length) break;
+    metrics.increment("rounds");
 
     progress(onProgress, {
       phase: "retrieving",
@@ -87,7 +89,7 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
       detail: `Retrieval batch ${round + 1}: ${activePairs.length} focused searches`
     });
 
-    const responses = await Promise.all(activePairs.map(async ({ mediaType, variant }) => ({
+    const responses = await metrics.measure("retrieval", () => Promise.all(activePairs.map(async ({ mediaType, variant }) => ({
       mediaType,
       variant,
       candidates: await queryLiveConnectors(variant.query, {
@@ -97,20 +99,22 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
         sources: FEED_MEDIA_TYPE_SOURCES[mediaType],
         allowFixtureFallback: false,
         originalQuery: term,
+        metrics,
         searchContext: {
           strategy: variant.strategy,
           variantKey: variant.key,
           entity: plans[mediaType].entity
         }
       })
-    })));
+    }))));
 
     const freshCandidates = responses.flatMap(({ mediaType, variant, candidates }) => {
       nextOffsets[mediaType].variants[variant.key] += candidates.length;
       if (candidates.length < EVALUATION_BATCH_SIZE) exhaustedPairs.add(`${mediaType}:${variant.key}`);
 
       return candidates.filter((candidate) => {
-        if (!candidate?.id || seenIds.has(candidate.id)) return false;
+        if (!candidate?.id) { metrics.increment("invalidCandidates"); return false; }
+        if (seenIds.has(candidate.id)) { metrics.increment("duplicates"); return false; }
         seenIds.add(candidate.id);
         return true;
       });
@@ -123,13 +127,21 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
       label: "Checking relevance with OpenScroll's evaluator",
       detail: `Evaluating ${freshCandidates.length} new candidates`
     });
-    const evaluation = await evaluateFeedCandidates(term, freshCandidates);
+    metrics.capture(freshCandidates);
+    const evaluation = await metrics.measure("evaluation", () => evaluateFeedCandidates(term, freshCandidates, { metrics }));
+    metrics.increment("evaluated", freshCandidates.length);
+    metrics.increment("accepted", evaluation.accepted.length);
+    metrics.increment("rejected", freshCandidates.length - evaluation.accepted.length);
     evaluatedCount += freshCandidates.length;
 
     for (const candidate of evaluation.accepted) {
       const mediaType = mediaTypes.find((type) => candidateMatchesMediaType(candidate, type));
       if (mediaType && passingCount() < PASSING_RESULTS_PER_BATCH) {
         passingByMediaType.get(mediaType).push(candidate);
+        metrics.increment("retained");
+        metrics.increment("pending");
+      } else {
+        metrics.increment("droppedAccepted");
       }
     }
 
@@ -160,7 +172,20 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
   };
 }
 
-export async function composeSearchFeed(body = {}, { onProgress } = {}) {
+export async function composeSearchFeed(body = {}, { onProgress, onMetrics, onCandidates } = {}) {
+  const metrics = createFeedMetrics({ onCandidates });
+  try {
+    const result = await composeMeasuredSearchFeed(body, { onProgress, metrics });
+    reportFeedMetrics(onMetrics, metrics, "ok");
+    return result;
+  } catch (error) {
+    metrics.increment("pipelineFailures");
+    reportFeedMetrics(onMetrics, metrics, "error");
+    throw error;
+  }
+}
+
+async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics }) {
   const {
     interest = "",
     feedback = [],
@@ -191,9 +216,12 @@ export async function composeSearchFeed(body = {}, { onProgress } = {}) {
     label: "Understanding your search",
     detail: searchPlan ? "Reusing the search interpretation for this next batch" : "Resolving the topic and preparing focused Commons searches"
   });
-  const existingPlans = providedSearchPlans(searchPlan, selectedMediaTypes);
-  const entity = existingPlans ? searchPlan.entity : await resolveEntity(searchTerm);
-  const plans = existingPlans || buildSearchPlans(searchTerm, entity, selectedMediaTypes);
+  const { entity, plans } = await metrics.measure("planning", async () => {
+    const existingPlans = providedSearchPlans(searchPlan, selectedMediaTypes);
+    if (existingPlans) metrics.increment("planReuses");
+    const entity = existingPlans ? searchPlan.entity : await resolveEntity(searchTerm, { metrics });
+    return { entity, plans: existingPlans || buildSearchPlans(searchTerm, entity, selectedMediaTypes) };
+  });
 
   progress(onProgress, {
     phase: "planning",
@@ -207,7 +235,8 @@ export async function composeSearchFeed(body = {}, { onProgress } = {}) {
     mediaTypes: selectedMediaTypes,
     plans,
     startOffsets: savedOffsets && typeof savedOffsets === "object" ? savedOffsets : {},
-    onProgress
+    onProgress,
+    metrics
   });
 
   progress(onProgress, {
@@ -225,7 +254,7 @@ export async function composeSearchFeed(body = {}, { onProgress } = {}) {
       ]))
     }
   }));
-  const result = composeDiversityFeed(labeledItems, {
+  const result = await metrics.measure("composition", () => composeDiversityFeed(labeledItems, {
     interestGraph: {
       interest: searchTerm,
       topics: [],
@@ -236,7 +265,10 @@ export async function composeSearchFeed(body = {}, { onProgress } = {}) {
     cursor,
     pageSize,
     seed
-  });
+  }));
+  metrics.increment("compositionExcluded", labeledItems.length - result.pagination.totalCount);
+  metrics.increment("visible", result.items.length);
+  metrics.set("pending", Math.max(0, result.pagination.totalCount - result.pagination.startIndex - result.items.length));
 
   return {
     ...result,

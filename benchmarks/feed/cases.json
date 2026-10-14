@@ -1,0 +1,32 @@
+[
+  {"id":"precise","term":"Gnawa music Morocco","mediaTypes":["images","audio","text"],"candidates":[
+    {"id":"synthetic:gnawa","title":"Gnawa ensemble with guembri and qraqeb","description":"A Gnawa music performance in Essaouira, Morocco."},
+    {"id":"synthetic:street","title":"Street in Rabat","description":"A general street photograph in Morocco; no musical performance is described."},
+    {"id":"synthetic:poor-description","title":"IMG 0123","description":"Unknown subject."}
+  ]},
+  {"id":"broad","term":"renewable energy","mediaTypes":["images","text"],"candidates":[
+    {"id":"synthetic:solar","title":"Solar power plant","description":"Photovoltaic panels generating renewable electricity."},
+    {"id":"synthetic:wind","title":"Wind turbine diagram","description":"How wind energy is converted into electrical power."},
+    {"id":"synthetic:energy-drink","title":"Energy drink can","description":"Commercial beverage packaging."}
+  ]},
+  {"id":"ambiguous","term":"jaguar","mediaTypes":["images","text"],"candidates":[
+    {"id":"synthetic:animal","title":"Jaguar in tropical forest","description":"Panthera onca, a large cat native to the Americas."},
+    {"id":"synthetic:car","title":"Jaguar automobile","description":"A vehicle manufactured by the Jaguar automotive brand."},
+    {"id":"synthetic:team","title":"Jacksonville Jaguars stadium","description":"An American football team's home stadium."}
+  ]},
+  {"id":"spanish","term":"música gnawa","mediaTypes":["images","audio"],"candidates":[
+    {"id":"synthetic:es-gnawa","title":"Músicos gnawa","description":"Interpretación musical con guembri y castañuelas metálicas en Marruecos."},
+    {"id":"synthetic:es-street","title":"Calle de Casablanca","description":"Fotografía de una calle sin músicos."},
+    {"id":"synthetic:es-poor","title":"Archivo 14","description":"Descripción no disponible."}
+  ]},
+  {"id":"arabic","term":"موسيقى كناوة","mediaTypes":["audio","text"],"candidates":[
+    {"id":"synthetic:ar-gnawa","title":"حفل موسيقى كناوة","description":"عزف الكنبري والقراقب في الصويرة بالمغرب."},
+    {"id":"synthetic:ar-street","title":"شارع في الرباط","description":"صورة شارع بدون عرض موسيقي."},
+    {"id":"synthetic:ar-poor","title":"ملف ١٢","description":"لا يوجد وصف."}
+  ]},
+  {"id":"sparse-video","term":"guembri construction tutorial","mediaTypes":["video"],"candidates":[
+    {"id":"synthetic:construction","title":"Making a guembri instrument","description":"A tutorial demonstrating the construction of the wooden body and strings."},
+    {"id":"synthetic:concert","title":"Guembri concert","description":"A musical performance without instrument-making instruction."},
+    {"id":"synthetic:generic-build","title":"Building a garden shed","description":"Woodworking instructions for an outdoor structure."}
+  ]}
+]
