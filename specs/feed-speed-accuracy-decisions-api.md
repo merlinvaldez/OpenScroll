@@ -20,7 +20,7 @@ Loading, empty, and error behavior:
 
 ## Scope and decisions
 
-Status: Step 1 implemented on October 14, 2026; later implementation steps remain unchecked. Created October 14, 2026.
+Status: Steps 1 and 2 implemented on October 14, 2026; later implementation steps remain unchecked. Created October 14, 2026.
 
 This incorporates the preceding backend recommendations, with the user's licensing removal replacing the earlier recommendation to improve license normalization. Include relevance ranking within media buckets as part of "everything recommended." Retain mixed-media exploration and deterministic ordering for a search session. Feedback remains explicit and local; broad learned preference modeling is not required by this change.
 
@@ -66,13 +66,19 @@ Step 1 evidence: [baseline report, limitations, targets, and commands](../benchm
 
 Outcome: usable source items normalize and enter the feed without licensing data.
 
-- [ ] Update `content-object.js`, `source-registry.js`, and `packages/contracts/src/schemas.js` to remove mandatory rights/rightsModel fields, rights-derived eligibility, and licensing provenance. Version changed public contracts rather than silently redefining `uco.v1`.
-- [ ] Preserve identity, canonical source URL, creator, content, language, media, capture time, and original/generated provenance independently of rights.
-- [ ] Remove `extractRights` as a required connector method and licensing gates/review queues from `connector-sdk.js` and `ingestion.js`. Update conformance tests and connector contract versions.
-- [ ] Remove the license gate from `feed-composer.js` and rights-dependent filtering from sample construction, item/article routes, and any other retrieval path. Keep valid-record, availability, media-type, explicit hide, and relevance checks.
-- [ ] Remove fabricated default licenses, permission flags, license parsing, rights verification, download policies, and mandatory attribution bundles from live connectors. Retrieve only metadata still needed for provenance or relevance.
-- [ ] Remove obsolete active exports, schemas, fixtures, events, review helpers, and tests in `rights.js`, content/contracts indexes, and related files after checking their consumers. Historical documentation may describe past behavior but must be marked superseded.
-- [ ] Migrate old saved records and exports without losing IDs, collections, source links, playback state, or user feedback. Legacy rights fields may be accepted on import for compatibility, but must not be required, displayed as guarantees, or used for eligibility.
+- [x] Update `content-object.js`, `source-registry.js`, and `packages/contracts/src/schemas.js` to remove mandatory rights/rightsModel fields, rights-derived eligibility, and licensing provenance. Version changed public contracts rather than silently redefining `uco.v1`.
+- [x] Preserve identity, canonical source URL, creator, content, language, media, capture time, and original/generated provenance independently of rights.
+- [x] Remove `extractRights` as a required connector method and licensing gates/review queues from `connector-sdk.js` and `ingestion.js`. Update conformance tests and connector contract versions.
+- [x] Remove the license gate from `feed-composer.js` and rights-dependent filtering from sample construction, item/article routes, and any other retrieval path. Keep valid-record, availability, media-type, explicit hide, and relevance checks.
+- [x] Remove fabricated default licenses, permission flags, license parsing, rights verification, download policies, and mandatory attribution bundles from live connectors. Retrieve only metadata still needed for provenance or relevance.
+- [x] Remove obsolete active exports, schemas, fixtures, events, review helpers, and tests in `rights.js`, content/contracts indexes, and related files after checking their consumers. Historical documentation may describe past behavior but must be marked superseded.
+- [x] Migrate old saved records and exports without losing IDs, collections, source links, playback state, or user feedback. Legacy rights fields may be accepted on import for compatibility, but must not be required, displayed as guarantees, or used for eligibility.
+
+Step 2 evidence (October 14, 2026): active `uco.v2`, source registry v2, `connector.v2`/`connector-run.v2`, and `ingestion-run.v2` contain no mandatory rights fields or licensing review queue. Former rights helpers and active schema exports are removed; immutable historical v1 schemas remain isolated in `packages/contracts/src/legacy-schemas.js` for compatibility auditing. Commons requests only provenance/relevance extmetadata; the museum image path no longer requires `isPublicDomain`. Item and article route copies stay synchronized and no longer dereference rights.
+
+Local storage/export v2 accepts v1 backups and upgrades existing IndexedDB saves. Regression and real-browser checks preserve existing IDs, collections, source links, playback position/rate, and feedback while dropping obsolete rights snapshots. The former v1 save writer never stored source URLs or playback positions; migration preserves those values where present and cannot reconstruct data that was never saved. A small compatibility UI change replaces the passport panel with source details and removes invented card/save defaults; comprehensive UI/string/style cleanup is still Step 8.
+
+Validation: `npm test` (57 passed, including live Wikipedia/Commons success, mocked absent/incompatible licenses, museum availability, route responses, old-backup round trips, and hide/availability checks), `npm run test:contracts`, lint (no errors; existing warnings), and production build passed. Chromium verified the actual IndexedDB upgrade and a mocked rights-free feed card/source-details interaction. These checks do not claim new AI behavior, continuation fixes, or measured performance improvements.
 
 ## 3. Fix source continuation and failure reporting
 

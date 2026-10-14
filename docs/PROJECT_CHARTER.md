@@ -1,3 +1,5 @@
+> Superseded licensing requirements (October 14, 2026): OpenScroll no longer requires license metadata, rights passports, licensing review, or license-based eligibility/download rules. Preserve source links, creator metadata, original/generated provenance, and technical availability. The current implementation plan is [feed-speed-accuracy-decisions-api.md](../specs/feed-speed-accuracy-decisions-api.md); this document records earlier behavior.
+
 # OpenScroll Project Charter
 
 **Status:** Active delivery; Epic D complete; Epic E next  

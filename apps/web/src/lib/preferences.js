@@ -1,7 +1,7 @@
 export const PREFERENCE_KEY = "openscroll:boot-preferences:v1";
 export const LOCAL_DB_NAME = "openscroll-local";
-export const LOCAL_DB_VERSION = 1;
-export const LOCAL_EXPORT_VERSION = 1;
+export const LOCAL_DB_VERSION = 2;
+export const LOCAL_EXPORT_VERSION = 2;
 
 export const STORE_NAMES = Object.freeze(["meta", "settings", "scrolls", "saves", "collections", "feedback", "history"]);
 export const DEFAULT_TOPICS = Object.freeze(["Music", "Darija", "History"]);
@@ -126,14 +126,14 @@ function cleanSave(record) {
     source: cleanString(record?.source, 120),
     savedAt: cleanDate(record?.savedAt),
     collectionIds: cleanRecords(record?.collectionIds, (item) => cleanString(item, 96), 20),
-    rightsSnapshot: {
-      basis: cleanString(record?.rightsSnapshot?.basis || "verified-open-source-item", 80),
-      source: cleanString(record?.rightsSnapshot?.source || record?.source, 120),
-      license: cleanString(record?.rightsSnapshot?.license, 120),
-      attribution: cleanString(record?.rightsSnapshot?.attribution, 360),
-      obligations: cleanRecords(record?.rightsSnapshot?.obligations, (item) => cleanString(item, 80), 12),
-      downloadAllowed: record?.rightsSnapshot?.downloadAllowed === true,
-      downloadNotice: cleanString(record?.rightsSnapshot?.downloadNotice, 200)
+    sourceUrl: cleanString(record?.sourceUrl || record?.object?.identity?.sourceRecordUrl, 2000),
+    originalSourceUrl: cleanString(record?.originalSourceUrl || record?.object?.identity?.originalSourceUrl, 2000),
+    mediaUrl: cleanString(record?.mediaUrl || record?.object?.media?.url, 2000),
+    creator: cleanString(record?.creator, 360),
+    origin: record?.origin === "generated" || record?.object?.system?.origin === "generated" ? "generated" : "original",
+    playback: {
+      positionSeconds: Number.isFinite(record?.playback?.positionSeconds) ? Math.max(0, record.playback.positionSeconds) : 0,
+      playbackRate: Number.isFinite(record?.playback?.playbackRate) ? Math.min(4, Math.max(0.25, record.playback.playbackRate)) : 1
     }
   };
 }
@@ -274,15 +274,12 @@ export function toggleSavedItem(state, item) {
       source: item.source,
       savedAt: timestamp,
       collectionIds: [collection.id],
-      rightsSnapshot: {
-        basis: cleanString(item.rightsSnapshot?.basis || "verified-open-source-item", 80),
-        source: cleanString(item.rightsSnapshot?.source || item.source, 120),
-        license: cleanString(item.rightsSnapshot?.license, 120),
-        attribution: cleanString(item.rightsSnapshot?.attribution, 360),
-        obligations: cleanRecords(item.rightsSnapshot?.obligations, (entry) => cleanString(entry, 80), 12),
-        downloadAllowed: item.rightsSnapshot?.downloadAllowed === true,
-        downloadNotice: cleanString(item.rightsSnapshot?.downloadNotice, 200)
-      }
+      sourceUrl: item.sourceUrl || item.object?.identity?.sourceRecordUrl,
+      originalSourceUrl: item.originalSourceUrl || item.object?.identity?.originalSourceUrl,
+      mediaUrl: item.mediaUrl || item.object?.media?.url,
+      creator: item.creator,
+      origin: item.origin || item.object?.system?.origin,
+      playback: item.playback
     }, ...localState.saves]
   }, timestamp);
 }
@@ -334,6 +331,14 @@ export function openLocalDatabase(indexedDBRef = globalThis.indexedDB) {
       for (const store of STORE_NAMES) {
         if (!db.objectStoreNames.contains(store)) db.createObjectStore(store, { keyPath: store === "meta" || store === "settings" ? "key" : "id" });
       }
+      const saves = request.transaction.objectStore("saves").openCursor();
+      saves.onsuccess = () => {
+        const cursor = saves.result;
+        if (!cursor) return;
+        const migrated = cleanSave(cursor.value);
+        if (migrated) cursor.update(migrated);
+        cursor.continue();
+      };
       request.transaction.objectStore("meta").put({ key: "schema", version: LOCAL_DB_VERSION, migratedAt: nowIso() });
     };
     request.onsuccess = () => resolve(request.result);
@@ -465,7 +470,7 @@ export function parseLocalImport(value) {
   } catch (error) {
     throw Object.assign(new Error("Import file is not valid JSON."), { cause: error });
   }
-  if (parsed?.product !== "OpenScroll" || parsed?.kind !== "local-browser-backup" || parsed?.schemaVersion !== LOCAL_EXPORT_VERSION) {
+  if (parsed?.product !== "OpenScroll" || parsed?.kind !== "local-browser-backup" || ![1, LOCAL_EXPORT_VERSION].includes(parsed?.schemaVersion)) {
     throw new Error("Import file is not an OpenScroll local backup.");
   }
   return normalizeLocalState(parsed.data);

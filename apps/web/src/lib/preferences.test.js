@@ -56,8 +56,7 @@ test("saves and explicit feedback remain browser-local records", () => {
   const card = { id: "commons-gnawa-pulse", title: "The living pulse of Gnawa", source: "Wikimedia Commons", rightsSnapshot: { license: "CC BY-SA 4.0", attribution: "Commons contributor", obligations: ["attribution", "share-alike"], downloadAllowed: true, downloadNotice: "Allowed with attribution." } };
   const saved = toggleSavedItem(createDefaultLocalState(), card);
   assert.equal(saved.saves[0].itemId, card.id);
-  assert.equal(saved.saves[0].rightsSnapshot.downloadAllowed, true);
-  assert.deepEqual(saved.saves[0].rightsSnapshot.obligations, ["attribution", "share-alike"]);
+  assert.equal(saved.saves[0].rightsSnapshot, undefined);
   assert.equal(saved.collections[0].id, "collection:saved");
   const feedback = recordExplicitFeedback(saved, card);
   assert.equal(feedback.feedback[0].signal, "explicit");
@@ -95,4 +94,39 @@ test("quota and private-mode failures return usable status", async () => {
   assert.equal(result.status.availability, "unavailable");
   assert.equal(result.state.scrolls[0].interest, "Morocco");
   assert.equal(result.state.settings.locale, "es");
+});
+
+test("v1 backups migrate saves, source links, playback, collections, and feedback to v2", () => {
+  const legacy = {
+    product: "OpenScroll", kind: "local-browser-backup", schemaVersion: 1,
+    data: {
+      schemaVersion: 1,
+      saves: [{ id: "save:legacy", itemId: "uco:commons:42", title: "Recording", source: "Commons",
+        sourceUrl: "https://example.org/record/42", originalSourceUrl: "https://example.org/original/42",
+        mediaUrl: "https://example.org/42.ogg", creator: "Performer", origin: "original",
+        collectionIds: ["collection:music"], playback: { positionSeconds: 37.5, playbackRate: 1.25 },
+        savedAt: "2026-10-01T12:00:00.000Z", rightsSnapshot: { license: "Unknown", downloadAllowed: false, basis: "verified-open" } }],
+      collections: [{ id: "collection:music", name: "Music" }],
+      feedback: [{ id: "feedback:42", itemId: "uco:commons:42", action: "hide" }]
+    }
+  };
+  const imported = parseLocalImport(legacy);
+  const save = imported.saves[0];
+  assert.equal(imported.schemaVersion, 2);
+  assert.equal(save.id, "save:legacy");
+  assert.equal(save.itemId, "uco:commons:42");
+  assert.equal(save.savedAt, legacy.data.saves[0].savedAt);
+  assert.equal(save.sourceUrl, legacy.data.saves[0].sourceUrl);
+  assert.equal(save.originalSourceUrl, legacy.data.saves[0].originalSourceUrl);
+  assert.equal(save.mediaUrl, legacy.data.saves[0].mediaUrl);
+  assert.deepEqual(save.playback, legacy.data.saves[0].playback);
+  assert.deepEqual(save.collectionIds, [imported.collections[0].id]);
+  assert.equal(imported.feedback[0].itemId, save.itemId);
+  assert.equal(imported.feedback[0].action, "hide");
+  assert.equal(save.rightsSnapshot, undefined);
+  const exported = buildLocalExport(imported);
+  assert.equal(exported.schemaVersion, 2);
+  assert.deepEqual(parseLocalImport(exported).saves, imported.saves);
+  assert.doesNotMatch(JSON.stringify(exported), /rightsSnapshot|verified-open|downloadAllowed/);
+  assert.throws(() => parseLocalImport({ ...legacy, schemaVersion: 99 }));
 });

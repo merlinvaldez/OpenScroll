@@ -1,17 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fetchWikipediaArticleLive, queryLiveConnectors, searchWikipediaLive, searchCommonsLive } from "../src/index.js";
+import { fetchWikipediaArticleLive, queryLiveConnectors, searchWikipediaLive, searchCommonsLive, searchMetMuseumLive } from "../src/index.js";
 
-test("live Wikipedia search returns real, rich reader UCO items", async () => {
+test("live Wikipedia search returns real, rich reader UCO items", async (t) => {
   const items = await searchWikipediaLive("Tokyo", 3);
-  if (items.length > 0) {
+  if (!items.length) return t.skip("Live Wikipedia unavailable or returned no results");
+  {
     const first = items[0];
     assert.ok(first.id.startsWith("wikipedia:"));
     assert.ok(first.title);
     assert.equal(first.content.type, "reader");
     assert.ok(first.content.text.length > 20);
-    assert.equal(first.rights.licenseId, "CC-BY-SA-4.0");
-    assert.ok(first.rights.attributionNotice.text.includes("Wikipedia contributors"));
+    assert.equal(first.rights, undefined);
+    assert.ok(first.sourceUrl);
+    assert.ok(first.creators.length);
   }
 });
 
@@ -56,23 +58,27 @@ test("full Wikipedia article fetch returns the complete plaintext article", asyn
   }
 });
 
-test("live Wikimedia Commons search returns real media items with license metadata", async () => {
+test("live Wikimedia Commons search returns real media items without licensing requirements", async (t) => {
   const items = await searchCommonsLive("Renaissance Art", 4);
-  if (items.length > 0) {
+  if (!items.length) return t.skip("Live Commons unavailable or returned no results");
+  {
     const first = items[0];
     assert.ok(first.id.startsWith("wikimedia-commons:"));
     assert.ok(first.media?.url);
-    assert.ok(first.rights.licenseId);
+    assert.equal(first.rights, undefined);
+    assert.ok(first.sourceUrl);
   }
 });
 
-test("queryLiveConnectors aggregates across multiple live sources and falls back safely", async () => {
-  const items = await queryLiveConnectors("Quantum Mechanics");
+test("queryLiveConnectors aggregates live sources without licensing passports", async (t) => {
+  const items = await queryLiveConnectors("Quantum Mechanics", { allowFixtureFallback: false });
+  if (!items.length) return t.skip("Live sources unavailable or returned no results");
   assert.ok(items.length > 0, "must return items for any topic");
   for (const item of items) {
     const title = item.content?.title || item.title;
     assert.ok(title, "must have title");
-    assert.ok(item.rights, "must have rights passport");
+    assert.equal(item.rights, undefined);
+    assert.equal(item.schemaVersion, "uco.v2");
   }
 });
 
@@ -192,4 +198,39 @@ test("Commons media searches add a type-specific file filter", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Commons normalization ignores absent and incompatible licenses and requests no license metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  let requested;
+  globalThis.fetch = async (url) => {
+    requested = new URL(url);
+    return { ok: true, json: async () => ({ query: { pages: {
+      "1": { pageid: 1, title: "File:No license.jpg", imageinfo: [{ url: "https://example.org/1.jpg", mime: "image/jpeg" }] },
+      "2": { pageid: 2, title: "File:Noncommercial.jpg", imageinfo: [{ url: "https://example.org/2.jpg", mime: "image/jpeg", extmetadata: { LicenseShortName: { value: "CC BY-NC" }, Artist: { value: "Actual artist" } } }] }
+    } } }) };
+  };
+  try {
+    const items = await queryLiveConnectors("Topic", { sources: ["wikimedia-commons"], allowFixtureFallback: false });
+    assert.equal(items.length, 2);
+    assert.ok(items.every((item) => item.rights === undefined));
+    assert.equal(items[0].creator.names.length, 0);
+    assert.equal(items[1].creator.names[0].name, "Actual artist");
+    assert.doesNotMatch(requested.searchParams.get("iiextmetadatafilter"), /license|permission|attribution/i);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("museum items require available images rather than public-domain status", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => ({ ok: true, json: async () => url.includes("/search?") ? { objectIDs: [42, 43] } : {
+    objectID: url.endsWith("42") ? 42 : 43, title: "Artwork", isPublicDomain: false,
+    primaryImageSmall: url.endsWith("42") ? "https://example.org/art.jpg" : "", artistDisplayName: "Artist"
+  } });
+  try {
+    const items = await searchMetMuseumLive("Art", 2);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].rights, undefined);
+    assert.equal(items[0].creators[0].name, "Artist");
+    assert.doesNotMatch(JSON.stringify(items), /CC0|Public Domain|commercialUse|modifications/);
+  } finally { globalThis.fetch = originalFetch; }
 });

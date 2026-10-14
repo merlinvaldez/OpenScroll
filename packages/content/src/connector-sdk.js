@@ -1,10 +1,9 @@
 import { validateUniversalContentObject } from "./content-object.js";
-import { createOpenLicenseGateDecision, createRightsReviewCase } from "./rights.js";
 import { SOURCE_REGISTRY } from "./source-registry.js";
 import { cleanString, deepFreeze } from "./utils.js";
 
-export const CONNECTOR_CONTRACT_VERSION = "connector.v1";
-export const CONNECTOR_METHODS = Object.freeze(["search", "fetch", "normalize", "extractRights", "fetchMedia", "resolveEntities", "refresh", "rateLimit", "healthcheck"]);
+export const CONNECTOR_CONTRACT_VERSION = "connector.v2";
+export const CONNECTOR_METHODS = Object.freeze(["search", "fetch", "normalize", "fetchMedia", "resolveEntities", "refresh", "rateLimit", "healthcheck"]);
 
 export function createConnector(definition) {
   const missing = CONNECTOR_METHODS.filter((method) => typeof definition?.[method] !== "function");
@@ -19,7 +18,6 @@ export async function runConnectorConformance(connector, options = {}) {
   const query = cleanString(options.query || "Morocco", 120);
   const checks = [];
   const rejected = [];
-  const reviewQueue = [];
   const objects = [];
   const health = await connector.healthcheck({ registry });
   checks.push({ name: "healthcheck", passed: Boolean(health?.status) });
@@ -29,32 +27,23 @@ export async function runConnectorConformance(connector, options = {}) {
   checks.push({ name: "search", passed: Array.isArray(candidates) });
   for (const candidate of candidates) {
     const fetched = await connector.fetch(candidate.id, { registry });
-    const rights = await connector.extractRights(fetched, { registry });
-    const gate = createOpenLicenseGateDecision(rights, { itemId: fetched.sourceItemId || fetched.id, sourceId: fetched.sourceId });
-    if (gate.decision === "review") {
-      reviewQueue.push(createRightsReviewCase(fetched, gate));
-      continue;
-    }
-    if (gate.decision === "reject") {
-      rejected.push({ id: fetched.id, sourceId: fetched.sourceId, reason: gate.reason, gate });
-      continue;
-    }
     const media = await connector.fetchMedia(fetched, { registry });
     const entities = await connector.resolveEntities(fetched, { registry });
     const normalized = await connector.normalize({ ...fetched, media: { ...fetched.media, ...media }, entities: entities.length ? entities : fetched.entities }, { registry });
     const validation = validateUniversalContentObject(normalized, registry);
     checks.push({ name: `normalize:${fetched.id}`, passed: validation.valid, errors: validation.errors });
-    objects.push(normalized);
+    if (validation.valid) objects.push(normalized);
+    else rejected.push({ id: fetched.id, sourceId: fetched.sourceId, reason: validation.errors.join("; ") });
   }
   const refresh = await connector.refresh({ registry, cursor: options.cursor || null });
   checks.push({ name: "refresh", passed: Boolean(refresh?.checkpoint) });
   return deepFreeze({
+    schemaVersion: "connector-run.v2",
     connectorId: connector.id,
     passed: checks.every((check) => check.passed),
     checks,
     objectCount: objects.length,
     rejected,
-    reviewQueue,
     objects,
     refresh
   });

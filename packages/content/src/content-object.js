@@ -1,9 +1,8 @@
-import { evaluateRights, isEligibleRights } from "./rights.js";
 import { getSource, SOURCE_REGISTRY } from "./source-registry.js";
 import { asArray, cleanString, deepFreeze, isoDate, numberBetween, slug, unique } from "./utils.js";
 
-export const UNIVERSAL_CONTENT_OBJECT_VERSION = "uco.v1";
-export const REQUIRED_UCO_SECTIONS = Object.freeze(["identity", "content", "creator", "time", "geography", "language", "knowledge", "media", "source", "rights", "ranking", "system"]);
+export const UNIVERSAL_CONTENT_OBJECT_VERSION = "uco.v2";
+export const REQUIRED_UCO_SECTIONS = Object.freeze(["identity", "content", "creator", "time", "geography", "language", "knowledge", "media", "source", "ranking", "system"]);
 
 function cleanContentText(value, maxLength) {
   return typeof value === "string"
@@ -26,7 +25,6 @@ function provenanceMap(record, source) {
     "language.original": provenance(source, "languages", 0.86, "normalized-language"),
     "knowledge.entities": provenance(source, "entities", 0.82, "linked"),
     "media": provenance(source, "media", 0.88, "normalized-media"),
-    "rights": provenance(source, "rights", 0.92, "source-verified"),
     "source": provenance(source, "sourceId", 1, "registry-join")
   });
 }
@@ -39,19 +37,7 @@ export function createUniversalContentObject(record, options = {}) {
   const registry = options.registry || SOURCE_REGISTRY;
   const source = getSource(record.sourceId, registry);
   if (!source) throw new Error(`Unknown source: ${record.sourceId}`);
-  const retrievedAt = isoDate(options.now || record.retrievedAt);
-  const creatorNames = asArray(record.creators).map((creator) => cleanString(creator.name, 160)).filter(Boolean);
-  const rights = evaluateRights(record.rights, {
-    sourceId: source.id,
-    sourceName: source.name,
-    sourceUrl: record.sourceUrl,
-    originalSourceUrl: record.originalSourceUrl || record.sourceUrl,
-    mediaUrl: record.media?.url,
-    metadataUrl: record.sourceUrl,
-    title: record.title,
-    creatorNames,
-    now: retrievedAt
-  });
+  const retrievedAt = isoDate(options.now || record.retrievedAt || record.provenance?.capturedAt);
   const places = asArray(record.places).map((place) => ({
     label: cleanString(place.label, 120),
     countryCode: cleanString(place.countryCode, 8).toUpperCase(),
@@ -75,7 +61,7 @@ export function createUniversalContentObject(record, options = {}) {
   const object = {
     schemaVersion: UNIVERSAL_CONTENT_OBJECT_VERSION,
     id: createContentId(record),
-    canonicalUrl: cleanString(record.canonicalUrl || `https://openscroll.app/item/${source.id}/${slug(record.sourceItemId || record.title)}`, 300),
+    canonicalUrl: cleanString(record.canonicalUrl || record.sourceUrl, 300),
     identity: {
       sourceItemId: cleanString(record.sourceItemId || record.id, 180),
       sourceRecordUrl: cleanString(record.sourceUrl, 300),
@@ -137,7 +123,8 @@ export function createUniversalContentObject(record, options = {}) {
       kind: cleanString(record.media?.kind || record.type, 40),
       url: cleanString(record.media?.url || record.sourceUrl, 300),
       thumbnailUrl: cleanString(record.media?.thumbnailUrl, 300),
-      mimeType: cleanString(record.media?.mimeType, 80),
+      mimeType: cleanString(record.media?.mimeType || record.media?.mime, 80),
+      status: cleanString(record.media?.status || (record.media?.url ? "available" : "metadata-only"), 40),
       width: Number.isInteger(record.media?.width) ? record.media.width : null,
       height: Number.isInteger(record.media?.height) ? record.media.height : null,
       durationSeconds: Number.isFinite(record.media?.durationSeconds) ? record.media.durationSeconds : null,
@@ -154,13 +141,12 @@ export function createUniversalContentObject(record, options = {}) {
       retrievedAt,
       links: unique([record.sourceUrl, record.originalSourceUrl].filter(Boolean))
     },
-    rights,
     ranking: {
       quality: numberBetween(record.ranking?.quality, 0, 1, source.quality.metadataCompleteness),
       relevanceSignals: {
         explicitTopicMatch: topics.length ? 1 : 0,
         retrievalScore: numberBetween(record.ranking?.retrievalScore, 0, 1, 0),
-        sourceConfidence: source.quality.rightsConfidence,
+        sourceConfidence: source.quality.metadataCompleteness,
         metadataCompleteness: source.quality.metadataCompleteness
       },
       diversitySignals: {
@@ -175,7 +161,8 @@ export function createUniversalContentObject(record, options = {}) {
       updatedAt: retrievedAt,
       ingestRunId: cleanString(options.ingestRunId || "fixture:epic-c", 120),
       sourceHealth: source.health.status,
-      warnings: isEligibleRights(rights) ? [] : [rights.rejectedReason],
+      origin: record.system?.origin === "generated" || record.provenance?.origin === "generated" ? "generated" : "original",
+      warnings: [],
       provenance: provenanceMap(record, source)
     }
   };
@@ -184,13 +171,12 @@ export function createUniversalContentObject(record, options = {}) {
 
 export function validateUniversalContentObject(object, registry = SOURCE_REGISTRY) {
   const errors = [];
-  if (object?.schemaVersion !== UNIVERSAL_CONTENT_OBJECT_VERSION) errors.push("schemaVersion must be uco.v1");
+  if (object?.schemaVersion !== UNIVERSAL_CONTENT_OBJECT_VERSION) errors.push("schemaVersion must be uco.v2");
   for (const section of REQUIRED_UCO_SECTIONS) if (!object?.[section]) errors.push(`${section} section is required`);
   if (!object?.id?.startsWith("uco:")) errors.push("id must be a canonical uco id");
   if (!object?.content?.title) errors.push("content.title is required");
   if (!object?.identity?.sourceItemId || !object?.identity?.sourceRecordUrl) errors.push("identity source fields are required");
   if (!getSource(object?.source?.id, registry)) errors.push("source must exist in the Source Registry");
-  if (!isEligibleRights(object?.rights)) errors.push("rights must be verified open and eligible");
   if (!object?.system?.provenance || Object.keys(object.system.provenance).length < 8) errors.push("field-level provenance is required");
   if (!object?.media?.kind || !object.media.url) errors.push("media kind and url are required");
   return { valid: errors.length === 0, errors };

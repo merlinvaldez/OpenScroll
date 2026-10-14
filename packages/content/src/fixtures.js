@@ -19,8 +19,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["History", "Culture"],
     entities: [{ id: "Q1028", label: "Morocco", source: "wikidata" }],
     collection: "Wikipedia articles",
-    media: { kind: "text", url: "https://en.wikipedia.org/wiki/Morocco", accessibility: { altText: "Text article about Morocco" } },
-    rights: { licenseId: "cc-by-sa-4.0", sourceVerified: true, attribution: "Wikipedia contributors" }
+    media: { kind: "text", url: "https://en.wikipedia.org/wiki/Morocco", accessibility: { altText: "Text article about Morocco" } }
   },
   {
     id: "wikidata-gnawa",
@@ -37,8 +36,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["Music", "Culture"],
     entities: [{ id: "Q1501622", label: "Gnawa", source: "wikidata" }],
     collection: "Wikidata entities",
-    media: { kind: "knowledge-entity", url: "https://www.wikidata.org/wiki/Q1501622" },
-    rights: { licenseId: "cc0", sourceVerified: true, attribution: "Wikidata contributors" }
+    media: { kind: "knowledge-entity", url: "https://www.wikidata.org/wiki/Q1501622" }
   },
   {
     id: "wiktionary-darija",
@@ -56,8 +54,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["Darija", "Culture"],
     entities: [{ id: "Q56426", label: "Moroccan Arabic", source: "wikidata" }],
     collection: "Wiktionary entries",
-    media: { kind: "text", url: "https://en.wiktionary.org/wiki/Moroccan_Arabic", accessibility: { altText: "Dictionary entry for Moroccan Arabic" } },
-    rights: { licenseId: "cc-by-sa-4.0", sourceVerified: true, attribution: "Wiktionary contributors" }
+    media: { kind: "text", url: "https://en.wiktionary.org/wiki/Moroccan_Arabic", accessibility: { altText: "Dictionary entry for Moroccan Arabic" } }
   },
   {
     id: "wikivoyage-medina-history",
@@ -75,8 +72,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["History", "Architecture"],
     entities: [{ id: "Q101625", label: "Marrakesh", source: "wikidata" }],
     collection: "Wikivoyage guides",
-    media: { kind: "text", url: "https://en.wikivoyage.org/wiki/Marrakesh", accessibility: { altText: "Travel guide text for Marrakesh" } },
-    rights: { licenseId: "cc-by-sa-4.0", sourceVerified: true, attribution: "Wikivoyage contributors" }
+    media: { kind: "text", url: "https://en.wikivoyage.org/wiki/Marrakesh", accessibility: { altText: "Travel guide text for Marrakesh" } }
   },
   {
     id: "wikisource-morocco-treaty",
@@ -95,8 +91,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["History"],
     entities: [{ id: "Q1028", label: "Morocco", source: "wikidata" }],
     collection: "Wikisource diplomatic texts",
-    media: { kind: "text", url: "https://en.wikisource.org/wiki/Treaty_of_Peace_and_Friendship_between_the_United_States_and_Morocco" },
-    rights: { licenseId: "public-domain", sourceVerified: true, attribution: "Public domain source text via Wikisource" }
+    media: { kind: "text", url: "https://en.wikisource.org/wiki/Treaty_of_Peace_and_Friendship_between_the_United_States_and_Morocco" }
   },
   {
     id: "commons-gnawa-pulse",
@@ -114,8 +109,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["Music", "Culture"],
     entities: [{ id: "Q1501622", label: "Gnawa", source: "wikidata" }],
     collection: "Wikimedia Commons files",
-    media: { kind: "audio", url: "https://commons.wikimedia.org/wiki/File:Gnawa_music_Morocco.ogg", durationSeconds: 96, mimeType: "audio/ogg", accessibility: { transcript: "Instrumental or performance audio. Transcript pending source availability." } },
-    rights: { licenseId: "cc-by-sa-4.0", sourceVerified: true, attribution: "Wikimedia Commons contributor" }
+    media: { kind: "audio", url: "https://commons.wikimedia.org/wiki/File:Gnawa_music_Morocco.ogg", durationSeconds: 96, mimeType: "audio/ogg", accessibility: { transcript: "Instrumental or performance audio. Transcript pending source availability." } }
   },
   {
     id: "commons-hassan-tower-video",
@@ -132,8 +126,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["Architecture", "History"],
     entities: [{ id: "Q1135111", label: "Hassan Tower", source: "wikidata" }],
     collection: "Wikimedia Commons files",
-    media: { kind: "video", url: "https://commons.wikimedia.org/wiki/File:Hassan_Tower_Rabat.webm", durationSeconds: 34, mimeType: "video/webm", accessibility: { captions: "Source captions required before autoplay or inline playback." } },
-    rights: { licenseId: "cc-by-4.0", sourceVerified: true, attribution: "Wikimedia Commons contributor" }
+    media: { kind: "video", url: "https://commons.wikimedia.org/wiki/File:Hassan_Tower_Rabat.webm", durationSeconds: 34, mimeType: "video/webm", accessibility: { captions: "Source captions required before autoplay or inline playback." } }
   },
   {
     id: "openverse-ait-ben-haddou",
@@ -144,15 +137,14 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     originalSourceUrl: "https://example.org/photos/ait-ben-haddou",
     type: "image",
     title: "Ait Benhaddou earthen architecture",
-    description: "Openverse candidate retained only after original-source license recheck.",
+    description: "Openverse candidate with a canonical source link.",
     creators: [{ name: "Original CC BY photographer", role: "photographer" }],
     places: [{ label: "Ait Benhaddou", countryCode: "MA" }],
     languages: ["en"],
     topics: ["Architecture", "Culture"],
     entities: [{ id: "Q194277", label: "Ait Benhaddou", source: "wikidata" }],
     collection: "Openverse images",
-    media: { kind: "image", url: "https://example.org/photos/ait-ben-haddou.jpg", thumbnailUrl: "https://example.org/photos/ait-ben-haddou-thumb.jpg", width: 1600, height: 1067, mimeType: "image/jpeg", accessibility: { altText: "Earthen buildings at Ait Benhaddou in Morocco" } },
-    rights: { licenseId: "cc-by-4.0", sourceVerified: true, attribution: "Original CC BY photographer" }
+    media: { kind: "image", url: "https://example.org/photos/ait-ben-haddou.jpg", thumbnailUrl: "https://example.org/photos/ait-ben-haddou-thumb.jpg", width: 1600, height: 1067, mimeType: "image/jpeg", accessibility: { altText: "Earthen buildings at Ait Benhaddou in Morocco" } }
   },
   {
     id: "openverse-rejected-nc",
@@ -167,8 +159,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     places: [{ label: "Morocco", countryCode: "MA" }],
     languages: ["en"],
     topics: ["Culture"],
-    media: { kind: "image", url: "https://example.org/restricted/morocco.jpg" },
-    rights: { licenseId: "cc-by-nc-4.0", sourceVerified: true, attribution: "Restricted photographer" }
+    media: { kind: "image", url: "https://example.org/restricted/morocco.jpg" }
   },
   {
     id: "openverse-review-unverified",
@@ -183,8 +174,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     places: [{ label: "Morocco", countryCode: "MA" }],
     languages: ["en"],
     topics: ["Culture"],
-    media: { kind: "image", url: "https://example.org/unverified/morocco.jpg", accessibility: { altText: "Unverified photo candidate from Morocco" } },
-    rights: { licenseId: "cc-by-4.0", sourceVerified: false, attribution: "Unverified photographer" }
+    media: { kind: "image", url: "https://example.org/unverified/morocco.jpg", accessibility: { altText: "Unverified photo candidate from Morocco" } }
   },
   {
     id: "smithsonian-moroccan-robe",
@@ -201,8 +191,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["Culture", "History"],
     entities: [{ id: "Q1028", label: "Morocco", source: "wikidata" }],
     collection: "Smithsonian National Museum of African Art",
-    media: { kind: "image", url: "https://www.si.edu/openaccess/example-moroccan-robe.jpg", width: 1200, height: 1600, accessibility: { altText: "A Moroccan robe from the Smithsonian Open Access collection" } },
-    rights: { licenseId: "cc0", sourceVerified: true, attribution: "Smithsonian Open Access" }
+    media: { kind: "image", url: "https://www.si.edu/openaccess/example-moroccan-robe.jpg", width: 1200, height: 1600, accessibility: { altText: "A Moroccan robe from the Smithsonian Open Access collection" } }
   },
   {
     id: "europeana-fez-postcard",
@@ -220,8 +209,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     languages: ["fr", "en"],
     topics: ["History", "Architecture"],
     collection: "Europeana postcards",
-    media: { kind: "image", url: "https://example.org/europeana/fez-postcard.jpg", accessibility: { altText: "Historic postcard view of Fez" } },
-    rights: { licenseId: "public-domain-mark", sourceVerified: true, attribution: "Europeana provider institution" }
+    media: { kind: "image", url: "https://example.org/europeana/fez-postcard.jpg", accessibility: { altText: "Historic postcard view of Fez" } }
   },
   {
     id: "dpla-morocco-map",
@@ -231,7 +219,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     canonicalUrl: "https://openscroll.app/item/dpla/morocco-map",
     type: "map",
     title: "Historic map of Morocco",
-    description: "DPLA map record with holding institution and open rights metadata.",
+    description: "DPLA map record with holding institution metadata.",
     creators: [{ name: "Library holding institution", role: "provider" }],
     publishedAt: "1900-01-01T00:00:00.000Z",
     temporalCoverage: "circa 1900",
@@ -239,7 +227,6 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     languages: ["en"],
     topics: ["History", "Open data"],
     collection: "DPLA map records",
-    media: { kind: "map", url: "https://dp.la/item/example-morocco-map", accessibility: { altText: "Historic map of Morocco from a library collection" } },
-    rights: { licenseId: "public-domain", sourceVerified: true, attribution: "DPLA holding institution" }
+    media: { kind: "map", url: "https://dp.la/item/example-morocco-map", accessibility: { altText: "Historic map of Morocco from a library collection" } }
   }
 ]);

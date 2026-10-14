@@ -1,8 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canonicalMoroccoSample, composeDiversityFeed, deduplicateCandidates, scoreCandidate } from "../src/index.js";
+import { canonicalMoroccoSample, composeDiversityFeed, deduplicateCandidates } from "../src/index.js";
 
-test("feed composer enforces diversity constraints and filters through Open License Gate", () => {
+test("composition ignores legacy licenses while preserving availability and explicit hide checks", () => {
+  const base = canonicalMoroccoSample[0];
+  const make = (id, overrides = {}) => ({ ...base, id, content: { ...base.content, title: id }, ...overrides });
+  const candidates = [
+    make("absent"),
+    make("restricted", { rights: { eligibility: "rejected", licenseId: "cc-by-nc-4.0" } }),
+    make("hidden"),
+    make("unavailable", { media: { ...base.media, status: "unavailable" } }),
+    make("no-url", { media: { kind: "image" } }),
+    make("invalid", { content: {} })
+  ];
+  const result = composeDiversityFeed(candidates, { feedback: [{ itemId: "hidden", action: "hide" }], seed: 42 });
+  assert.deepEqual(new Set(result.items.map((item) => item.id)), new Set(["absent", "restricted"]));
+});
+
+test("feed composer enforces diversity constraints without licensing requirements", () => {
   const result = composeDiversityFeed(canonicalMoroccoSample, {
     interestGraph: {
       interest: "Morocco",
@@ -58,22 +73,19 @@ test("feed interleaves available media kinds before filling the dominant kind", 
       id: `image-${index}`,
       content: { title: `Image ${index}` },
       media: { kind: "image", url: `https://example.org/image-${index}.jpg` },
-      source: { id: `image-source-${index}` },
-      rights: { eligibility: "eligible" }
+      source: { id: `image-source-${index}` }
     })),
     ...Array.from({ length: 2 }, (_, index) => ({
       id: `audio-${index}`,
       content: { title: `Audio ${index}` },
       media: { kind: "audio", url: `https://example.org/audio-${index}.ogg` },
-      source: { id: `audio-source-${index}` },
-      rights: { eligibility: "eligible" }
+      source: { id: `audio-source-${index}` }
     })),
     ...Array.from({ length: 2 }, (_, index) => ({
       id: `video-${index}`,
       content: { title: `Video ${index}` },
       media: { kind: "video", url: `https://example.org/video-${index}.webm` },
-      source: { id: `video-source-${index}` },
-      rights: { eligibility: "eligible" }
+      source: { id: `video-source-${index}` }
     }))
   ];
 

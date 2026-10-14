@@ -21,9 +21,7 @@ export async function GET(request) {
     requestId: crypto.randomUUID(),
     data: {
       item,
-      canonicalUrl: item.canonicalUrl,
-      attribution: item.rights.attributionNotice.text,
-      rightsSnapshot: item.rights.whyOpen
+      canonicalUrl: item.canonicalUrl
     }
   });
 }

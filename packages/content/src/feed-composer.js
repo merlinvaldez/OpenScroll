@@ -1,4 +1,3 @@
-import { openLicenseGate } from "./rights.js";
 import { cleanString, deepFreeze, unique } from "./utils.js";
 
 function seededRandom(seed) {
@@ -125,20 +124,8 @@ export function composeDiversityFeed(candidates, options = {}) {
     seed
   } = options;
 
-  // 1. Pass through Open License Gate (Fail closed)
-  const eligible = candidates.filter((item) => {
-    if (!item.rights) return false;
-    if (item.rights.eligibility === "eligible" || item.rights.gate?.decision === "accept") {
-      return true;
-    }
-    const gate = openLicenseGate(item.rights, {
-      sourceId: item.source?.id || item.sourceId,
-      sourceName: item.source?.name,
-      sourceUrl: item.identity?.sourceRecordUrl || item.sourceUrl,
-      originalSourceUrl: item.identity?.originalSourceUrl || item.originalSourceUrl
-    });
-    return gate.decision === "accept";
-  });
+  // Keep usable records; licensing metadata has no effect on eligibility.
+  const eligible = candidates.filter((item) => item?.id && item.content?.title && item.media?.kind && item.media?.url && item.media.status !== "unavailable");
 
   // 2. Deduplicate
   const deduplicated = deduplicateCandidates(eligible);

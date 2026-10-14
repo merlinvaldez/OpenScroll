@@ -1,6 +1,5 @@
 import { createUniversalContentObject } from "./content-object.js";
 import { createConnector } from "./connector-sdk.js";
-import { evaluateRights } from "./rights.js";
 import { SOURCE_REGISTRY, getSource } from "./source-registry.js";
 import { cleanString, deepFreeze, unique } from "./utils.js";
 import { EPIC_C_RAW_ITEMS } from "./fixtures.js";
@@ -75,21 +74,9 @@ function createWikipediaRecord(pageData, { fullText = "", html = "" } = {}) {
         altText: `Image illustrating ${pageData.title}`
       }
     } : null,
-    rights: {
-      licenseId: "CC-BY-SA-4.0",
-      licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
-      copyrightStatus: "copyrighted",
-      sourceVerified: true,
-      commercialUse: "allowed",
-      modifications: "allowed",
-      attributionRequired: true,
-      attributionNotice: {
-        text: `"${pageData.title}" by Wikipedia contributors, licensed under CC BY-SA 4.0.`
-      }
-    },
     provenance: {
       capturedAt: new Date().toISOString(),
-      upstreamLicense: "CC-BY-SA-4.0"
+      origin: "original"
     },
     ranking: {
       quality: 0.88,
@@ -233,7 +220,7 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
   const cleanQ = encodeURIComponent(searchQuery);
   const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
   const offsetQuery = offset ? `&gsroffset=${offset}` : "";
-  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiurlwidth=640&format=json&origin=*`;
+  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiextmetadatafilter=Artist|ImageDescription|Categories|ObjectName|DateTimeOriginal|Assessments&iiurlwidth=640&format=json&origin=*`;
 
   const data = await safeFetch(url, {}, 6000, options.metrics);
   if (!data?.query?.pages) return [];
@@ -245,8 +232,7 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
     if (!info?.url) continue;
 
     const meta = info.extmetadata || {};
-    const rawLicense = meta.LicenseShortName?.value || meta.License?.value || "CC-BY-SA-4.0";
-    const artist = cleanString(meta.Artist?.value?.replace(/<[^>]*>/g, "") || "Wikimedia Commons Contributor", 80);
+    const artist = cleanString(meta.Artist?.value?.replace(/<[^>]*>/g, "") || "", 80);
     const desc = cleanString(meta.ImageDescription?.value?.replace(/<[^>]*>/g, "") || page.title.replace(/^File:/, ""), 240);
     const mime = info.mime || "";
 
@@ -296,21 +282,9 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
           altText: desc || title
         }
       },
-      rights: {
-        licenseId: rawLicense.includes("Public domain") || rawLicense.includes("PD") ? "Public-Domain" : "CC-BY-SA-4.0",
-        licenseUrl: meta.LicenseUrl?.value || "https://creativecommons.org/licenses/by-sa/4.0/",
-        copyrightStatus: rawLicense.includes("Public domain") ? "public-domain" : "copyrighted",
-        sourceVerified: true,
-        commercialUse: "allowed",
-        modifications: "allowed",
-        attributionRequired: !rawLicense.includes("Public domain"),
-        attributionNotice: {
-          text: `"${title}" by ${artist}, available via Wikimedia Commons under ${rawLicense}.`
-        }
-      },
       provenance: {
         capturedAt: new Date().toISOString(),
-        upstreamLicense: rawLicense
+        origin: "original"
       },
       ranking: {
         quality: 0.75 + retrievalMatch * 0.2,
@@ -326,7 +300,7 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. LIVE METROPOLITAN MUSEUM OF ART OPEN ACCESS CONNECTOR (CC0 Artworks)
+// 3. LIVE METROPOLITAN MUSEUM OF ART CONNECTOR (Available artwork images)
 // ---------------------------------------------------------------------------
 export async function searchMetMuseumLive(query, limit = 6) {
   const cleanQ = encodeURIComponent(cleanString(query, 100));
@@ -342,7 +316,7 @@ export async function searchMetMuseumLive(query, limit = 6) {
     const objUrl = `https://collectionapi.metmuseum.org/public/collection/v1/objects/${objId}`;
     const obj = await safeFetch(objUrl);
 
-    if (obj && obj.primaryImageSmall && obj.isPublicDomain) {
+    if (obj && obj.primaryImageSmall) {
       const artist = obj.artistDisplayName || obj.culture || "Unknown Artisan";
       const title = obj.title || "Museum Cultural Object";
 
@@ -361,7 +335,7 @@ export async function searchMetMuseumLive(query, limit = 6) {
         places: obj.country ? [{ label: obj.country, countryCode: "XX" }] : [],
         content: {
           type: "museum",
-          text: `${title} (${obj.objectDate || "Date unknown"}). Created by ${artist}. Repository: ${obj.repository}. Credit Line: ${obj.creditLine || "Public Domain"}.`
+          text: `${title} (${obj.objectDate || "Date unknown"}). Created by ${artist}. Repository: ${obj.repository}. Credit Line: ${obj.creditLine || "Not provided"}.`
         },
         media: {
           kind: "image",
@@ -374,21 +348,9 @@ export async function searchMetMuseumLive(query, limit = 6) {
             altText: `${title}, ${artist}`
           }
         },
-        rights: {
-          licenseId: "CC0-1.0",
-          licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
-          copyrightStatus: "public-domain",
-          sourceVerified: true,
-          commercialUse: "allowed",
-          modifications: "allowed",
-          attributionRequired: false,
-          attributionNotice: {
-            text: `"${title}" by ${artist}. The Metropolitan Museum of Art Open Access (CC0 1.0 Public Domain Dedication).`
-          }
-        },
         provenance: {
           capturedAt: new Date().toISOString(),
-          upstreamLicense: "CC0-1.0"
+          origin: "original"
         },
         ranking: {
           quality: 0.95,
@@ -482,7 +444,7 @@ function healthFor(sourceIds, registry = SOURCE_REGISTRY) {
   return { status: degraded?.health.status || "healthy", checkedAt: "2026-08-10T00:00:00.000Z", sourceIds };
 }
 
-function createFixtureConnector({ id, sourceIds, originalRightsRecheck = false }) {
+function createFixtureConnector({ id, sourceIds }) {
   return createConnector({
     id,
     sourceIds,
@@ -496,20 +458,6 @@ function createFixtureConnector({ id, sourceIds, originalRightsRecheck = false }
     },
     async normalize(record, { registry = SOURCE_REGISTRY } = {}) {
       return createUniversalContentObject(record, { registry, ingestRunId: `fixture:${id}` });
-    },
-    async extractRights(record, { registry = SOURCE_REGISTRY } = {}) {
-      const source = getSource(record.sourceId, registry);
-      const sourceUrl = originalRightsRecheck ? record.originalSourceUrl || record.sourceUrl : record.sourceUrl;
-      return evaluateRights(record.rights, {
-        sourceId: source.id,
-        sourceName: source.name,
-        sourceUrl: record.sourceUrl,
-        originalSourceUrl: sourceUrl,
-        mediaUrl: record.media?.url,
-        metadataUrl: record.sourceUrl,
-        title: record.title,
-        creatorNames: record.creators?.map((creator) => creator.name)
-      });
     },
     async fetchMedia(record) {
       return { ...record.media, status: record.media?.url ? "available" : "metadata-only" };
@@ -531,7 +479,7 @@ function createFixtureConnector({ id, sourceIds, originalRightsRecheck = false }
 
 export const wikimediaKnowledgeConnector = createFixtureConnector({ id: "wikimedia-knowledge", sourceIds: ["wikipedia", "wikidata", "wikisource", "wikivoyage", "wiktionary"] });
 export const wikimediaCommonsConnector = createFixtureConnector({ id: "wikimedia-commons", sourceIds: ["wikimedia-commons"] });
-export const openverseConnector = createFixtureConnector({ id: "openverse", sourceIds: ["openverse"], originalRightsRecheck: true });
+export const openverseConnector = createFixtureConnector({ id: "openverse", sourceIds: ["openverse"] });
 export const culturalAggregatorsConnector = createFixtureConnector({ id: "cultural-aggregators", sourceIds: ["smithsonian-open-access", "europeana", "dpla"] });
 
 export const EPIC_C_CONNECTORS = deepFreeze([wikimediaKnowledgeConnector, wikimediaCommonsConnector, openverseConnector, culturalAggregatorsConnector]);

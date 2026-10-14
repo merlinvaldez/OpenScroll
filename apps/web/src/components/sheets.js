@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
-  Check,
   Compass,
   Download,
   EyeOff,
@@ -15,7 +14,6 @@ import {
   Plus,
   RotateCcw,
   Scale,
-  ShieldCheck,
   Sparkles,
   Volume2,
   X
@@ -235,95 +233,21 @@ export function WhyThisSheet({ open, card, rootInterest = "Morocco", onClose, on
 
 export function WhyOpenSheet({ open, card, onClose, messages, locale }) {
   if (!card) return null;
-  const isArabic = locale === "ar";
-  const title = isArabic && card.original ? card.original : card.title;
-  const rights = card.object?.rights;
+  const title = locale === "ar" && card.original ? card.original : card.title;
   const description = card.object?.content?.description || card.object?.content?.text;
-  const sourceUrl = card.object?.identity?.sourceRecordUrl || card.object?.identity?.originalSourceUrl || card.object?.canonicalUrl || card.downloadUrl;
-
+  const sourceUrl = card.object?.identity?.sourceRecordUrl || card.sourceUrl || card.object?.canonicalUrl;
   return (
     <Sheet open={open} title={messages.whyOpen} onClose={onClose}>
-      <div className="sheet-panel why-open-panel">
-        <div className="rights-badge-row">
-          <div className="rights-shield">
-            <ShieldCheck size={28} className="shield-icon" aria-hidden="true" />
-          </div>
-          <div>
-            <span className="eyebrow">Open License Passport</span>
-            <h3>{card.license}</h3>
-            <p className="rights-headline">{card.openBasis}</p>
-          </div>
-        </div>
-
-        {description ? (
-          <section className="rights-section">
-            <h4>About this item</h4>
-            <p className="sheet-description" dir="auto">{description}</p>
-          </section>
-        ) : null}
-
-        <section className="rights-section">
-          <h4>{messages.plainPermissions}</h4>
-          <ul className="permissions-list">
-            <li>
-              <Check size={16} className="perm-check" aria-hidden="true" />
-              <span><strong>Free access:</strong> You may view, read, and inspect this object anytime without cost.</span>
-            </li>
-            <li>
-              <Check size={16} className="perm-check" aria-hidden="true" />
-              <span><strong>Redistribution:</strong> You may freely share, republish, and distribute this item.</span>
-            </li>
-            <li>
-              <Check size={16} className="perm-check" aria-hidden="true" />
-              <span><strong>Modification & Reuse:</strong> You may remix and build upon this knowledge.</span>
-            </li>
-          </ul>
-        </section>
-
-        <section className="rights-section">
-          <h4>{messages.plainObligations}</h4>
-          <div className="attribution-box">
-            <p className="attr-text" dir="auto">{card.attribution}</p>
-          </div>
-          <ul className="rights-bullets">
-            {card.whyOpen?.map((bullet, i) => (
-              <li key={i}>{bullet}</li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="rights-section">
-          <h4>Source & Verification</h4>
-          <dl className="rights-dl">
-            <div>
-              <dt>Holding Institution</dt>
-              <dd>{card.source}</dd>
-            </div>
-            <div>
-              <dt>Creator / Author</dt>
-              <dd>{card.creator || "Public contributor"}</dd>
-            </div>
-            <div>
-              <dt>Verification Passport</dt>
-              <dd>{rights?.verification?.evidence || "Verified on canonical source record."}</dd>
-            </div>
-            <div>
-              <dt>Download Status</dt>
-              <dd>{card.downloadRule}</dd>
-            </div>
-          </dl>
-          {card.downloadAllowed && sourceUrl ? (
-            <a
-              href={sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rights-source-link"
-            >
-              <Globe2 size={16} aria-hidden="true" />
-              <span>{messages.openSourceFile}</span>
-            </a>
-          ) : null}
-        </section>
+      <div className="sheet-panel">
+        <h3 dir="auto">{title}</h3>
+        {description ? <p className="sheet-description" dir="auto">{description}</p> : null}
+        <dl className="rights-dl">
+          <div><dt>{messages.source}</dt><dd>{card.source}</dd></div>
+          {card.creator ? <div><dt>{messages.creator}</dt><dd>{card.creator}</dd></div> : null}
+        </dl>
+        {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noreferrer" className="rights-source-link">
+          <Globe2 size={16} aria-hidden="true" /><span>{messages.openSourceFile}</span>
+        </a> : null}
       </div>
     </Sheet>
   );

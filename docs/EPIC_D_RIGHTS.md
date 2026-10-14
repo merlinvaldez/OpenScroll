@@ -1,3 +1,5 @@
+> Superseded licensing requirements (October 14, 2026): OpenScroll no longer requires license metadata, rights passports, licensing review, or license-based eligibility/download rules. Preserve source links, creator metadata, original/generated provenance, and technical availability. The current implementation plan is [feed-speed-accuracy-decisions-api.md](../specs/feed-speed-accuracy-decisions-api.md); this document records earlier behavior.
+
 # Epic D Rights Notes
 
 Epic D implements OS-021 through OS-027 as the rights, licensing, attribution, and download-safety layer for OpenScroll.

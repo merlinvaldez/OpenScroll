@@ -91,8 +91,7 @@ export function SavedLibrary({ localState, onToggleSave, onOpenCard, messages, l
               <div className="saved-card-body">
                 <span className="saved-source">{save.source}</span>
                 <h3 dir="auto">{save.title}</h3>
-                <span className="saved-license">{save.rightsSnapshot?.license || "Verified open"}</span>
-                <p className="saved-attr">{save.rightsSnapshot?.attribution}</p>
+                <p className="saved-attr">{save.creator}</p>
               </div>
               <div className="saved-card-actions">
                 <button

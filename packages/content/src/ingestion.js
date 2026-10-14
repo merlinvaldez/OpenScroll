@@ -1,5 +1,4 @@
 import { validateUniversalContentObject } from "./content-object.js";
-import { createOpenLicenseGateDecision, createRightsReviewCase } from "./rights.js";
 import { SOURCE_REGISTRY } from "./source-registry.js";
 import { cleanString, deepFreeze, slug } from "./utils.js";
 
@@ -32,7 +31,6 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
   const jobs = [];
   const checkpoints = [];
   const rejected = [];
-  const reviewQueue = [];
   const deadLetters = [];
   for (const connector of connectors) {
     const job = createIngestionJob({ connectorId: connector.id, sourceIds: connector.sourceIds, query });
@@ -44,16 +42,6 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
       const accepted = [];
       for (const candidate of candidates) {
         const fetched = await connector.fetch(candidate.id, { registry });
-        const rights = await connector.extractRights(fetched, { registry });
-        const gate = createOpenLicenseGateDecision(rights, { itemId: fetched.sourceItemId || fetched.id, sourceId: fetched.sourceId });
-        if (gate.decision === "review") {
-          reviewQueue.push({ ...createRightsReviewCase(fetched, gate), connectorId: connector.id });
-          continue;
-        }
-        if (gate.decision === "reject") {
-          rejected.push({ id: fetched.id, sourceId: fetched.sourceId, connectorId: connector.id, reason: gate.reason, gate });
-          continue;
-        }
         const media = await connector.fetchMedia(fetched, { registry });
         const entities = await connector.resolveEntities(fetched, { registry });
         const object = await connector.normalize({ ...fetched, media: { ...fetched.media, ...media }, entities }, { registry });
@@ -77,7 +65,7 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
     jobs.push({ ...job, status: "complete", attempts: result.attempts, objectCount: result.value.accepted.length });
   }
   return deepFreeze({
-    schemaVersion: "ingestion-run.v1",
+    schemaVersion: "ingestion-run.v2",
     id: `run:${slug(query)}:${connectors.map((connector) => connector.id).join("+")}`,
     query: cleanString(query, 120),
     status: deadLetters.length ? "partial" : "complete",
@@ -85,7 +73,6 @@ export async function runIngestion({ connectors, query = "Morocco", registry = S
     checkpoints,
     objects: [...objectsById.values()],
     rejected,
-    reviewQueue,
     deadLetters
   });
 }
