@@ -10,6 +10,7 @@
     "lint": "eslint app apps/web/src packages tests",
     "test": "node --test packages/contracts/test/*.test.js packages/content/test/*.test.js apps/web/src/**/*.test.js",
     "test:contracts": "node scripts/check-contracts.mjs",
+    "migrate": "node scripts/migrate-feed-store.mjs",
     "test:a11y": "playwright test --config=tests/playwright.config.js",
     "benchmark:feed": "node scripts/capture-feed-baseline.mjs",
     "check": "npm run lint && npm test && npm run test:contracts && npm run build"

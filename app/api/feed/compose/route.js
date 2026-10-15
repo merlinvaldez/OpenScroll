@@ -15,7 +15,13 @@ function streamResponse(body) {
           const data = await composeSearchFeed(body, { onMetrics, onProgress: (progress) => send({ type: "progress", ...progress }) });
           send({ type: "result", payload: { version: "1", requestId: crypto.randomUUID(), data } });
         } catch (error) {
-          send({ type: "error", error: error.message, status: error.status || 500 });
+          send({
+            type: "error",
+            error: error.message,
+            code: error.code || (error.status === 400 ? "INVALID_REQUEST" : error.status === 410 ? "CONTINUATION_EXPIRED" : "FEED_ERROR"),
+            status: error.status || 500,
+            canRestart: Boolean(error.canRestart)
+          });
         } finally {
           controller.close();
         }
@@ -39,12 +45,16 @@ export async function POST(request) {
     const data = await composeSearchFeed(body, { onMetrics });
     return NextResponse.json({ version: "1", requestId: crypto.randomUUID(), data });
   } catch (error) {
+    const status = Number.isInteger(error?.status) ? error.status : 500;
+    const isClientError = status === 400 || status === 410;
     return NextResponse.json(
       {
-        error: error.status === 400 ? error.message : "Failed to compose feed",
-        message: error.message
+        error: isClientError ? error.message : "Failed to compose feed",
+        message: error.message,
+        code: error.code || (status === 400 ? "INVALID_REQUEST" : status === 410 ? "CONTINUATION_EXPIRED" : "FEED_ERROR"),
+        canRestart: Boolean(error.canRestart)
       },
-      { status: Number.isInteger(error?.status) ? error.status : 500 }
+      { status }
     );
   }
 }

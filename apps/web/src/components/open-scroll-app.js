@@ -96,7 +96,11 @@ function createFeedSeed() {
 async function readFeedResponse(response, onProgress) {
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || payload?.error || "The open feed could not be built.");
+    const err = new Error(payload?.message || payload?.error || "The open feed could not be built.");
+    err.status = response.status;
+    err.code = payload?.code;
+    err.canRestart = payload?.canRestart;
+    throw err;
   }
 
   if (!response.body || !response.headers.get("content-type")?.includes("application/x-ndjson")) {
@@ -116,7 +120,11 @@ async function readFeedResponse(response, onProgress) {
     } else if (payload.type === "result") {
       result = payload.payload;
     } else if (payload.type === "error") {
-      throw new Error(payload.error || "The open feed could not be built.");
+      const err = new Error(payload.error || "The open feed could not be built.");
+      err.status = payload.status;
+      err.code = payload.code;
+      err.canRestart = payload.canRestart;
+      throw err;
     }
   };
 
@@ -380,9 +388,10 @@ export default function OpenScrollApp() {
         method: "POST",
         headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
         body: JSON.stringify({
+          continuation: feedCursor,
+          cursor: nextCursor,
           interest: cleanInterest,
           feedback: localState.feedback,
-          cursor: nextCursor,
           pageSize: 25,
           seed: feedSeed,
           sourceOffsets: feedSourceOffsets,
@@ -395,7 +404,7 @@ export default function OpenScrollApp() {
 
       const nextItems = payload?.data?.items || [];
       setFeedSourceOffsets(payload?.data?.sourceOffsets || {});
-      setFeedExhausted(!nextItems.length || payload?.data?.sourceHasMore === false);
+      setFeedExhausted(!nextItems.length || payload?.data?.pagination?.hasMore === false || payload?.data?.sourceHasMore === false);
 
       if (nextItems.length) {
         const nextCards = nextItems.map(transformUcoToCard);
@@ -409,7 +418,12 @@ export default function OpenScrollApp() {
         setFeedCursor(null);
       }
     } catch (error) {
-      setToast(error.message);
+      if (error.code === "CONTINUATION_EXPIRED" || error.status === 410) {
+        setFeedCursor(null);
+        setToast("Feed session expired. Tap search to restart.");
+      } else {
+        setToast(error.message);
+      }
     } finally {
       setIsLoadingMore(false);
       setFeedLoadingStage(null);

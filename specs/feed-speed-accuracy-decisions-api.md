@@ -20,7 +20,7 @@ Loading, empty, and error behavior:
 
 ## Scope and decisions
 
-Status: Steps 1 and 2 implemented on October 14, 2026; later implementation steps remain unchecked. Created October 14, 2026.
+Status: Steps 1, 2, 3, and 4 implemented by October 15, 2026; later implementation steps remain unchecked. Created October 14, 2026.
 
 This incorporates the preceding backend recommendations, with the user's licensing removal replacing the earlier recommendation to improve license normalization. Include relevance ranking within media buckets as part of "everything recommended." Retain mixed-media exploration and deterministic ordering for a search session. Feedback remains explicit and local; broad learned preference modeling is not required by this change.
 
@@ -101,13 +101,20 @@ Validation: `npm test` (64 passed, including live Wikipedia/Commons, mocked rate
 
 Outcome: accepted results survive page boundaries and retries.
 
-- [ ] Define a versioned continuation that binds the normalized query, chosen topic meaning, media types, sources, seed, plan version, and evaluation configuration.
-- [ ] Retain per-search upstream continuation, permanently exhausted pairs, candidate metadata/decision cache references, seen IDs, delivered IDs, and pending accepted overflow.
-- [ ] Use opaque server-validated continuation with a shared TTL store suitable for separate server instances. Choose and document the store and expiry during implementation; do not rely on process memory or expose unbounded state in browser requests. Add deterministic setup/migration commands if a datastore is introduced.
-- [ ] Make delivery/retry acknowledgments idempotent: replaying an interrupted batch must not lose or duplicate cards. Avoid advancing committed delivery state before the client can recover the batch.
-- [ ] Compose from pending accepted items first, retaining the remainder. Refill toward requested visible page size after normalization, deduplication, and feedback exclusions.
-- [ ] Separate page position within a retained pool from new source retrieval. A nonzero cursor must not slice unrelated newly retrieved candidates.
-- [ ] Validate page sizes, query lengths, continuation size, and request budgets. Persist exhaustion instead of restarting empty searches on every page.
+- [x] Define a versioned continuation that binds the normalized query, chosen topic meaning, media types, sources, seed, plan version, and evaluation configuration.
+- [x] Retain per-search upstream continuation, permanently exhausted pairs, candidate metadata/decision cache references, seen IDs, delivered IDs, and pending accepted overflow.
+- [x] Use opaque server-validated continuation with a shared TTL store suitable for separate server instances. Choose and document the store and expiry during implementation; do not rely on process memory or expose unbounded state in browser requests. Add deterministic setup/migration commands if a datastore is introduced.
+- [x] Make delivery/retry acknowledgments idempotent: replaying an interrupted batch must not lose or duplicate cards. Avoid advancing committed delivery state before the client can recover the batch.
+- [x] Compose from pending accepted items first, retaining the remainder. Refill toward requested visible page size after normalization, deduplication, and feedback exclusions.
+- [x] Separate page position within a retained pool from new source retrieval. A nonzero cursor must not slice unrelated newly retrieved candidates.
+- [x] Validate page sizes, query lengths, continuation size, and request budgets. Persist exhaustion instead of restarting empty searches on every page.
+
+Step 4 evidence (October 15, 2026): Versioned continuation `feed-continuation.v1` is defined and validated against `feedContinuationSchema`. Session state binds the normalized query, topic interpretation, media types, sources, seed, plan version, and evaluation configuration. Server-side session persistence uses a shared TTL store (`FileFeedContinuationStore` by default with configurable directory via `FEED_CONTINUATION_STORE_DIR`, and `MemoryFeedContinuationStore` for isolated test environments) with an atomic write/rename pattern, sliding/touch updates, automatic expiration (1 hour default), and a deterministic migration and verification command (`npm run migrate`). Opaque signed continuation tokens (`fcont_<sessionId>.<seq>.<hmac>`) prevent exposure of unbounded client state and protect against tampering.
+
+Delivery acknowledgments are fully idempotent: replaying an interrupted batch returns the exact cached batch without re-evaluating sources or skipping cards. Pagination composes from `pendingAccepted` overflow first, refilling from upstream sources only when the retained pool is insufficient. Nonzero cursors never slice newly retrieved candidates. Feed request validation bounds queries (1-200 chars), page sizes (1-100), continuation token size (<512 bytes), and request budgets, while persisting exhaustion so that exhausted feeds immediately return empty terminal responses without restarting empty source calls. Expired continuations throw HTTP 410 (`CONTINUATION_EXPIRED`) offering the client a restart without discarding saved items.
+
+Validation: `npm test` (71 passed, including versioned continuation contracts, TTL expiration, store pruning, overflow preservation, idempotent retry replay, request validation, and exhaustion persistence), `npm run test:contracts` (passed), `npm run lint` (0 errors, 0 warnings), `npm run migrate` (verified store initialization and pruning), and `npm run build` (production build succeeded).
+
 
 ## 5. Replace GPT-4o and introduce Decisions relevance
 

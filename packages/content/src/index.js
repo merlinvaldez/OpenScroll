@@ -24,6 +24,24 @@ export { expandTopics, resolveEntity, evaluateFeedCandidates, buildQueryPlan } f
 export { composeDiversityFeed, deduplicateCandidates, scoreCandidate } from "./feed-composer.js";
 export { buildCommonsSearchPlan, buildSearchPlans } from "./search-planner.js";
 export { composeSearchFeed, FEED_MEDIA_TYPE_KINDS, FEED_MEDIA_TYPE_SOURCES } from "./feed-search.js";
+export {
+  FEED_CONTINUATION_VERSION,
+  DEFAULT_CONTINUATION_TTL_MS,
+  MAX_CONTINUATION_TTL_MS,
+  MAX_CONTINUATION_TOKEN_LENGTH,
+  CONTINUATION_TOKEN_PREFIX,
+  ContinuationExpiredError,
+  InvalidContinuationError,
+  FeedRequestValidationError,
+  createContinuationToken,
+  parseContinuationToken,
+  createFeedContinuationState,
+  validateFeedContinuation,
+  validateFeedRequest,
+  FileFeedContinuationStore,
+  MemoryFeedContinuationStore,
+  getContinuationStore
+} from "./feed-continuation.js";
 
 import { createUniversalContentObject } from "./content-object.js";
 import { EPIC_C_RAW_ITEMS } from "./fixtures.js";
