@@ -15,7 +15,6 @@ import {
   Music,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   Sparkles,
   Video
 } from "lucide-react";
@@ -171,7 +170,6 @@ export default function OpenScrollApp() {
   const [storageStatus, setStorageStatus] = useState({ availability: "checking", message: "" });
   const [storageEstimate, setStorageEstimate] = useState({ persisted: false, usage: null, quota: null, percent: null });
 
-  const restoreFocus = useRef(null);
   const interestInput = useRef(null);
   const importInput = useRef(null);
   const messages = catalog[locale] ?? catalog.en;

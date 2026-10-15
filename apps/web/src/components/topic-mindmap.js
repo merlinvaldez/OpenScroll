@@ -15,14 +15,12 @@ import {
   Eye,
   FileText,
   Gem,
-  GitBranch,
   Globe,
   Grid,
   History,
   Info,
   Layers,
   MapPin,
-  Maximize2,
   Mic,
   Mountain,
   Music,
@@ -78,14 +76,14 @@ export function TopicMindmap({
   query,
   entity,
   categories = [],
-  mindmap = null,
+  mindmap: _mindmap = null,
   selectedTopics = new Set(),
   onToggleTopic,
   onSelectAll,
   onClearAll,
   onBuildScroll,
   isLoading = false,
-  messages = {}
+  messages: _messages = {}
 }) {
   const [viewMode, setViewMode] = useState("mindmap"); // "mindmap" | "clusters"
   const [focusedNode, setFocusedNode] = useState(null);

@@ -1,4 +1,5 @@
 import { defineConfig, globalIgnores } from "eslint/config";
+import reactPlugin from "eslint-plugin-react";
 
 export default defineConfig([
   globalIgnores([
@@ -10,6 +11,9 @@ export default defineConfig([
   ]),
   {
     files: ["**/*.js", "**/*.mjs"],
+    plugins: {
+      react: reactPlugin
+    },
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -20,6 +24,7 @@ export default defineConfig([
       }
     },
     rules: {
+      "react/jsx-uses-vars": "error",
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "no-undef": "off"
     }

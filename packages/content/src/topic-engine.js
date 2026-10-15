@@ -1,4 +1,5 @@
 import { cleanString, deepFreeze, slug, unique } from "./utils.js";
+import { abortError, fetchJsonWithRetry, getRequestBudgetConfig, isAbortError } from "./source-batch.js";
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_OPENAI_MODEL = "gpt-4o";
@@ -46,10 +47,10 @@ async function requestOpenAIJsonMeasured(messages, options = {}) {
     throw new OpenAIConfigurationError("The server cannot reach OpenAI because fetch is unavailable.");
   }
 
-  let response;
+  const budget = getRequestBudgetConfig();
+  let payload;
   try {
-    options.metrics?.increment("aiCalls");
-    response = await fetch(OPENAI_CHAT_COMPLETIONS_URL, {
+    payload = await fetchJsonWithRetry(OPENAI_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -59,22 +60,23 @@ async function requestOpenAIJsonMeasured(messages, options = {}) {
         model,
         messages,
         response_format: { type: "json_object" }
-      })
+      }),
+      signal: options.signal,
+      deadline: options.deadline,
+      timeoutMs: options.aiTimeoutMs ?? budget.aiTimeoutMs,
+      maxRetries: options.aiMaxRetries ?? budget.aiMaxRetries,
+      baseDelayMs: options.retryBaseDelayMs,
+      onAttempt: () => options.metrics?.increment("aiCalls"),
+      onRetry: () => options.metrics?.increment("aiRetries")
     });
   } catch (error) {
-    throw new OpenAIRequestError(`OpenAI request failed: ${error.message}`);
-  }
-
-  let payload = null;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new OpenAIRequestError(`OpenAI returned an invalid response (${response.status}).`, response.status);
-  }
-
-  if (!response.ok) {
-    const message = payload?.error?.message || `OpenAI request failed (${response.status}).`;
-    throw new OpenAIRequestError(message, response.status);
+    if (isAbortError(error)) throw abortError();
+    const status = Number.isInteger(error?.status) ? error.status : error?.kind === "timeout" ? 504 : 502;
+    const message = error?.kind === "malformed" ? `OpenAI returned an invalid response (${status}).` : `OpenAI request failed: ${error?.message || "unknown error"}`;
+    const failure = new OpenAIRequestError(message, status);
+    failure.kind = error?.kind || "network";
+    failure.retryable = Boolean(error?.retryable);
+    throw failure;
   }
   options.metrics?.addUsage(payload, model);
 

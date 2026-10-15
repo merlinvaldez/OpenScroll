@@ -32,12 +32,16 @@ test("failed feed records metrics without replacing the error", async () => {
   await assert.rejects(composeSearchFeed({}, { onMetrics: () => { throw new Error("observer"); } }), /search term/);
 });
 
-test("source failures are visible in telemetry even though current connector returns empty", async () => {
+test("source failures are visible in telemetry and return failed batch", async () => {
   const originalFetch = globalThis.fetch;
   const metrics = createFeedMetrics();
   globalThis.fetch = async () => ({ ok: false, status: 429 });
   try {
-    assert.deepEqual(await searchCommonsLive("test", 5, { metrics }), []);
+    const batch = await searchCommonsLive("test", 5, { metrics, maxRetries: 0 });
+    assert.equal(batch.length, 0);
+    assert.equal(batch.status, "failed");
+    assert.equal(batch.failure?.kind, "rate-limited");
+    assert.equal(batch.failure?.status, 429);
     assert.equal(metrics.snapshot().counters.sourceCalls, 1);
     assert.equal(metrics.snapshot().counters.sourceFailures, 1);
   } finally { globalThis.fetch = originalFetch; }

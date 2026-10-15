@@ -3,7 +3,23 @@ export { createContentId, createUniversalContentObject, REQUIRED_UCO_SECTIONS, U
 export { EPIC_C_RAW_ITEMS } from "./fixtures.js";
 export { createIngestionJob, runIngestion } from "./ingestion.js";
 export { SOURCE_HEALTH, SOURCE_REGISTRY, SOURCE_REGISTRY_VERSION, createSourceRegistry, getSource, validateSourceRecord } from "./source-registry.js";
-export { EPIC_C_CONNECTORS, culturalAggregatorsConnector, openverseConnector, wikimediaCommonsConnector, wikimediaKnowledgeConnector, queryLiveConnectors, searchWikipediaLive, fetchWikipediaArticleLive, searchCommonsLive, searchMetMuseumLive } from "./source-connectors.js";
+export { EPIC_C_CONNECTORS, culturalAggregatorsConnector, openverseConnector, wikimediaCommonsConnector, wikimediaKnowledgeConnector, queryLiveConnectors, searchWikipediaLive, fetchWikipediaArticleLive, searchCommonsLive, searchMetMuseumLive, SOURCE_QUERY_VERSION } from "./source-connectors.js";
+export {
+  SOURCE_BATCH_VERSION,
+  SOURCE_FAILURE_KINDS,
+  SourceRequestError,
+  abortError,
+  createSourceBatch,
+  describeFailure,
+  failedSourceBatch,
+  fetchJsonWithRetry,
+  getRequestBudgetConfig,
+  isAbortError,
+  normalizeSourceRecords,
+  parseRetryAfter,
+  validateFeedCandidate,
+  validateSourceBatch
+} from "./source-batch.js";
 export { expandTopics, resolveEntity, evaluateFeedCandidates, buildQueryPlan } from "./topic-engine.js";
 export { composeDiversityFeed, deduplicateCandidates, scoreCandidate } from "./feed-composer.js";
 export { buildCommonsSearchPlan, buildSearchPlans } from "./search-planner.js";

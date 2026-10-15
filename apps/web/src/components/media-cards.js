@@ -4,15 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Compass,
-  Database,
   Globe2,
   Headphones,
   Info,
   Music,
   Pause,
-  Play,
-  RotateCcw,
-  Volume2
+  Play
 } from "lucide-react";
 import { IconButton } from "./primitives";
 

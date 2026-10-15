@@ -5,17 +5,13 @@ import {
   ArrowRight,
   BookOpen,
   Compass,
-  Download,
   EyeOff,
   ExternalLink,
   GitBranch,
   Globe2,
   Minus,
   Plus,
-  RotateCcw,
-  Scale,
   Sparkles,
-  Volume2,
   X
 } from "lucide-react";
 import { Sheet } from "./primitives";

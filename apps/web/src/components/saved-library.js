@@ -4,20 +4,13 @@ import { useState } from "react";
 import {
   Bookmark,
   BookmarkCheck,
-  ExternalLink,
   Folder,
-  FolderPlus,
-  Plus,
-  Search,
-  Trash2
+  Search
 } from "lucide-react";
-import { IconButton } from "./primitives";
 
-export function SavedLibrary({ localState, onToggleSave, onOpenCard, messages, locale }) {
+export function SavedLibrary({ localState, onToggleSave, messages }) {
   const [selectedCollection, setSelectedCollection] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [newCollectionName, setNewCollectionName] = useState("");
-  const [showCreateFolder, setShowCreateFolder] = useState(false);
 
   const saves = localState.saves || [];
   const collections = localState.collections || [];

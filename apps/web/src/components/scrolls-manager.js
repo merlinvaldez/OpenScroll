@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, FileText, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Compass, Plus } from "lucide-react";
 
 export function ScrollsManager({ localState, activeScrollId, onSelectScroll, onCreateNew, messages, locale }) {
   const scrolls = localState.scrolls || [];

@@ -84,12 +84,18 @@ Validation: `npm test` (57 passed, including live Wikipedia/Commons success, moc
 
 Outcome: filtering and timeouts cannot masquerade as source exhaustion.
 
-- [ ] Change source results to a validated batch contract containing items, upstream continuation, exhausted state, source/query identity, and explicit failure information. Preserve raw source counts for diagnostics.
-- [ ] Follow MediaWiki continuation, including generator/property continuation where applicable. Advance from source-provided state rather than normalized candidate count.
-- [ ] Distinguish empty successful pages, exhausted sources, malformed responses, rate limits, and retryable failures. Keep failed continuation positions retryable.
-- [ ] Propagate abort signals and configurable source/AI timeouts. Keep deadlines active through response-body reading and clean up timers in all paths.
-- [ ] Replace normalization's catch-and-return-raw behavior with explicit invalid-record handling; one malformed item should not silently violate the content contract.
-- [ ] Add bounded retries for transient failures, honoring rate-limit guidance and the total request deadline. Never substitute fixtures or a different AI model on failure.
+- [x] Change source results to a validated batch contract containing items, upstream continuation, exhausted state, source/query identity, and explicit failure information. Preserve raw source counts for diagnostics.
+- [x] Follow MediaWiki continuation, including generator/property continuation where applicable. Advance from source-provided state rather than normalized candidate count.
+- [x] Distinguish empty successful pages, exhausted sources, malformed responses, rate limits, and retryable failures. Keep failed continuation positions retryable.
+- [x] Propagate abort signals and configurable source/AI timeouts. Keep deadlines active through response-body reading and clean up timers in all paths.
+- [x] Replace normalization's catch-and-return-raw behavior with explicit invalid-record handling; one malformed item should not silently violate the content contract.
+- [x] Add bounded retries for transient failures, honoring rate-limit guidance and the total request deadline. Never substitute fixtures or a different AI model on failure.
+
+Step 3 evidence (October 15, 2026): Live source queries (`searchWikipediaLive`, `searchCommonsLive`, `searchMetMuseumLive`, and `queryLiveConnectors`) return a validated `SourceBatch` (`source-batch.v1`) that implements full array interoperability while exposing source ID, query, continuation tokens, exhausted status, invalid-record reasons, raw counts, and typed failure descriptors. MediaWiki `continue` (`sroffset`, `gsroffset`, and generator continuation) is preserved and returned. `fetchJsonWithRetry` provides bounded retries on transient errors (429, 408, 5xx, network drops) with exponential backoff and `Retry-After` header parsing, per-attempt timeouts that remain active through response-body streaming, abort signal propagation, overall deadline enforcement, and timer cleanup in all paths.
+
+Candidate normalization now rejects and reports malformed records without silently letting raw malformed objects pass through or dropping the batch. Failed request continuation positions remain preserved for retrying, preventing source timeouts or rate limits from being reported as source exhaustion. Fixture substitution on failure is prohibited.
+
+Validation: `npm test` (64 passed, including live Wikipedia/Commons, mocked rate-limit/server retries, timeout enforcement, malformed body rejection, and source batch contracts), `npm run test:contracts`, `npm run lint` (0 errors), and `npm run build` (production build succeeded).
 
 ## 4. Preserve complete feed state between requests
 

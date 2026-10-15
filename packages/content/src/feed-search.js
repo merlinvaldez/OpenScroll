@@ -68,7 +68,7 @@ function progress(onProgress, payload) {
   if (typeof onProgress === "function") onProgress(payload);
 }
 
-async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets, onProgress, metrics }) {
+async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets, onProgress, metrics, signal, deadline }) {
   const passingByMediaType = new Map(mediaTypes.map((mediaType) => [mediaType, []]));
   const nextOffsets = normalizeStartOffsets(startOffsets, plans);
   const exhaustedPairs = new Set();
@@ -100,6 +100,8 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
         allowFixtureFallback: false,
         originalQuery: term,
         metrics,
+        signal,
+        deadline,
         searchContext: {
           strategy: variant.strategy,
           variantKey: variant.key,
@@ -110,7 +112,13 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
 
     const freshCandidates = responses.flatMap(({ mediaType, variant, candidates }) => {
       nextOffsets[mediaType].variants[variant.key] += candidates.length;
-      if (candidates.length < EVALUATION_BATCH_SIZE) exhaustedPairs.add(`${mediaType}:${variant.key}`);
+      const hasFailure = candidates.failures?.length > 0 || candidates.batches?.some((b) => b.status === "failed");
+      const isExhausted = candidates.exhausted || (candidates.batches?.length > 0 && candidates.batches.every((b) => b.exhausted));
+      if (isExhausted && !hasFailure) {
+        exhaustedPairs.add(`${mediaType}:${variant.key}`);
+      } else if (candidates.length < EVALUATION_BATCH_SIZE && !hasFailure) {
+        exhaustedPairs.add(`${mediaType}:${variant.key}`);
+      }
 
       return candidates.filter((candidate) => {
         if (!candidate?.id) { metrics.increment("invalidCandidates"); return false; }
@@ -172,10 +180,11 @@ async function fetchPassingSearchResults({ term, mediaTypes, plans, startOffsets
   };
 }
 
-export async function composeSearchFeed(body = {}, { onProgress, onMetrics, onCandidates } = {}) {
+export async function composeSearchFeed(body = {}, options = {}) {
+  const { onProgress, onMetrics, onCandidates, signal, deadline } = options;
   const metrics = createFeedMetrics({ onCandidates });
   try {
-    const result = await composeMeasuredSearchFeed(body, { onProgress, metrics });
+    const result = await composeMeasuredSearchFeed(body, { onProgress, metrics, signal, deadline });
     reportFeedMetrics(onMetrics, metrics, "ok");
     return result;
   } catch (error) {
@@ -185,7 +194,7 @@ export async function composeSearchFeed(body = {}, { onProgress, onMetrics, onCa
   }
 }
 
-async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics }) {
+async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics, signal, deadline }) {
   const {
     interest = "",
     feedback = [],
@@ -236,7 +245,9 @@ async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics }) {
     plans,
     startOffsets: savedOffsets && typeof savedOffsets === "object" ? savedOffsets : {},
     onProgress,
-    metrics
+    metrics,
+    signal,
+    deadline
   });
 
   progress(onProgress, {

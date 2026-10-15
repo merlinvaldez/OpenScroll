@@ -3,34 +3,86 @@ import { createConnector } from "./connector-sdk.js";
 import { SOURCE_REGISTRY, getSource } from "./source-registry.js";
 import { cleanString, deepFreeze, unique } from "./utils.js";
 import { EPIC_C_RAW_ITEMS } from "./fixtures.js";
+import {
+  SourceRequestError,
+  createSourceBatch,
+  failedSourceBatch,
+  fetchJsonWithRetry,
+  normalizeSourceRecords,
+  parseRetryAfter
+} from "./source-batch.js";
 
 const USER_AGENT = "OpenScroll/1.0 (https://github.com/merlinvaldez/OpenScroll; open-knowledge-client)";
 
-// Helper: safe fetch with timeout
-async function safeFetch(url, options = {}, timeoutMs = 6000, metrics) {
-  metrics?.increment("sourceCalls");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+// Typed source request: per-attempt timeout through body reading, bounded
+// retries, caller abort signal, and the overall request deadline.
+function sourceJson(url, options = {}, inspect) {
+  return fetchJsonWithRetry(url, {
+    signal: options.signal,
+    deadline: options.deadline,
+    timeoutMs: options.timeoutMs,
+    maxRetries: options.maxRetries,
+    baseDelayMs: options.retryBaseDelayMs,
+    inspect,
+    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    onAttempt: () => options.metrics?.increment("sourceCalls"),
+    onRetry: () => options.metrics?.increment("sourceRetries")
+  });
+}
+
+// Used only by single-item lookups (article reader) where "not loaded" is the only outcome.
+async function optionalJson(url, options = {}) {
   try {
-    const res = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "application/json",
-        ...(options.headers || {})
-      }
-    });
-    clearTimeout(timeout);
-    if (!res.ok) { metrics?.increment("sourceFailures"); return null; }
-    const data = await res.json();
-    if (data?.error) metrics?.increment("sourceFailures");
-    return data;
+    return await sourceJson(url, options, inspectMediaWikiIfPresent);
   } catch {
-    clearTimeout(timeout);
-    metrics?.increment("sourceFailures");
     return null;
   }
+}
+
+function inspectMediaWikiIfPresent(data, response) {
+  if (data?.error) inspectMediaWiki(data, response);
+}
+
+// MediaWiki can report errors inside an HTTP 200 body.
+function inspectMediaWiki(data, response) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new SourceRequestError("malformed", "MediaWiki response was not an object", { status: response?.status });
+  }
+  if (!data.error) return;
+  const code = cleanString(String(data.error.code || ""), 60);
+  const retryAfterMs = parseRetryAfter(response?.headers?.get?.("retry-after"));
+  const kind = code === "ratelimited" ? "rate-limited"
+    : ["maxlag", "readonly", "internal_api_error_DBQueryError", "internal_api_error_DBConnectionError"].includes(code) || code.startsWith("internal_api_error") ? "server"
+      : "client";
+  throw new SourceRequestError(kind, `MediaWiki error ${code || "unknown"}`, { status: response?.status ?? null, retryAfterMs });
+}
+
+const RESERVED_MEDIAWIKI_PARAMS = new Set(["action", "format", "origin", "list", "generator", "prop", "srsearch", "gsrsearch", "titles"]);
+
+// Accepts only the shape MediaWiki returns in `continue`: short scalar values with simple keys.
+function sanitizeMediaWikiContinuation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const entries = Object.entries(value)
+    .filter(([key, entry]) => /^[a-z]{1,24}$/.test(key) && !RESERVED_MEDIAWIKI_PARAMS.has(key) && ["string", "number"].includes(typeof entry) && String(entry).length <= 300)
+    .slice(0, 8);
+  return entries.length ? Object.fromEntries(entries) : null;
+}
+
+// Resumes from source-provided continuation. A legacy integer offset is mapped
+// to the equivalent MediaWiki offset parameter for older clients.
+function requestedMediaWikiContinuation(options, offsetKey, continueValue) {
+  const provided = sanitizeMediaWikiContinuation(options.continuation);
+  if (provided) return provided;
+  if (Number.isInteger(options.offset) && options.offset > 0) return { [offsetKey]: options.offset, continue: continueValue };
+  return null;
+}
+
+function applyContinuation(params, continuation) {
+  for (const [key, value] of Object.entries(continuation || {})) params.set(key, String(value));
+}
+
+function recordSourceFailure(options, error) {
+  if (error?.kind !== "aborted") options.metrics?.increment("sourceFailures");
 }
 
 // ---------------------------------------------------------------------------
@@ -86,27 +138,40 @@ function createWikipediaRecord(pageData, { fullText = "", html = "" } = {}) {
 }
 
 export async function searchWikipediaLive(query, limit = 8, options = {}) {
-  const cleanQ = encodeURIComponent(cleanString(query, 100));
-  const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
-  const offsetQuery = offset ? `&sroffset=${offset}` : "";
-  const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${cleanQ}&format=json&srlimit=${limit}${offsetQuery}&origin=*`;
-  
-  const searchData = await safeFetch(searchUrl, {}, 6000, options.metrics);
-  if (!searchData?.query?.search) return [];
-  options.metrics?.increment("rawResults", searchData.query.search.length);
+  const cleanQ = cleanString(query, 100);
+  const requestContinuation = requestedMediaWikiContinuation(options, "sroffset", "-||");
+  const params = new URLSearchParams({ action: "query", list: "search", srsearch: cleanQ, format: "json", srlimit: String(limit), origin: "*" });
+  applyContinuation(params, requestContinuation);
 
-  const results = [];
-  for (const item of searchData.query.search) {
-    const title = item.title;
-    const pageUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-    const pageData = await safeFetch(pageUrl, {}, 6000, options.metrics);
-
-    if (pageData && pageData.type === "standard") {
-      results.push(createWikipediaRecord(pageData));
+  try {
+    const searchData = await sourceJson(`https://en.wikipedia.org/w/api.php?${params.toString()}`, options, inspectMediaWiki);
+    if (!Array.isArray(searchData?.query?.search)) {
+      throw new SourceRequestError("malformed", "Wikipedia search response is missing query.search");
     }
-  }
+    const hits = searchData.query.search;
+    options.metrics?.increment("rawResults", hits.length);
 
-  return results;
+    const records = [];
+    for (const item of hits) {
+      const pageUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(item.title)}`;
+      let pageData;
+      try {
+        pageData = await sourceJson(pageUrl, options);
+      } catch (error) {
+        // A page deleted since indexing is filtered; any other failure fails the batch so its position stays retryable.
+        if (error?.status === 404) continue;
+        throw error;
+      }
+      if (pageData?.type === "standard") records.push(createWikipediaRecord(pageData));
+    }
+
+    const { items, invalid } = normalizeSourceRecords(records, options);
+    const continuation = sanitizeMediaWikiContinuation(searchData.continue);
+    return createSourceBatch({ sourceId: "wikipedia", query: cleanQ, items, invalid, rawCount: hits.length, continuation, exhausted: !continuation });
+  } catch (error) {
+    recordSourceFailure(options, error);
+    return failedSourceBatch({ sourceId: "wikipedia", query: cleanQ, error, requestContinuation });
+  }
 }
 
 export async function fetchWikipediaArticleLive(title) {
@@ -135,8 +200,8 @@ export async function fetchWikipediaArticleLive(title) {
     origin: "*"
   });
   const [data, parsedData] = await Promise.all([
-    safeFetch(`https://en.wikipedia.org/w/api.php?${params.toString()}`),
-    safeFetch(`https://en.wikipedia.org/w/api.php?${parseParams.toString()}`)
+    optionalJson(`https://en.wikipedia.org/w/api.php?${params.toString()}`),
+    optionalJson(`https://en.wikipedia.org/w/api.php?${parseParams.toString()}`)
   ]);
   const page = Object.values(data?.query?.pages || {})[0];
   if (!page || page.missing !== undefined || !page.extract) return null;
@@ -217,24 +282,47 @@ function retrievalScore(query, title, description, categories) {
 export async function searchCommonsLive(query, limit = 12, options = {}) {
   const mediaTypeFilter = COMMONS_MEDIA_TYPE_FILTERS[options.mediaType] || "";
   const searchQuery = [cleanString(query, 100), mediaTypeFilter].filter(Boolean).join(" ");
+  const requestContinuation = requestedMediaWikiContinuation(options, "gsroffset", "gsroffset||");
   const cleanQ = encodeURIComponent(searchQuery);
-  const offset = Number.isInteger(options.offset) && options.offset > 0 ? options.offset : 0;
-  const offsetQuery = offset ? `&gsroffset=${offset}` : "";
-  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${offsetQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiextmetadatafilter=Artist|ImageDescription|Categories|ObjectName|DateTimeOriginal|Assessments&iiurlwidth=640&format=json&origin=*`;
+  const contParams = new URLSearchParams();
+  applyContinuation(contParams, requestContinuation);
+  const contQuery = contParams.toString() ? `&${contParams.toString()}` : "";
+  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${contQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiextmetadatafilter=Artist|ImageDescription|Categories|ObjectName|DateTimeOriginal|Assessments&iiurlwidth=640&format=json&origin=*`;
 
-  const data = await safeFetch(url, {}, 6000, options.metrics);
-  if (!data?.query?.pages) return [];
-  options.metrics?.increment("rawResults", Object.keys(data.query.pages).length);
+  let data;
+  try {
+    data = await sourceJson(url, options, inspectMediaWiki);
+    // A search with no matches omits `query`; a present but non-object `pages` is malformed.
+    const queryBlock = data.query;
+    const pagesValue = queryBlock?.pages;
+    if (queryBlock !== undefined && (queryBlock === null || typeof queryBlock !== "object" || (pagesValue !== undefined && (pagesValue === null || typeof pagesValue !== "object" || Array.isArray(pagesValue))))) {
+      throw new SourceRequestError("malformed", "Commons response has invalid query.pages");
+    }
+  } catch (error) {
+    recordSourceFailure(options, error);
+    return failedSourceBatch({ sourceId: "wikimedia-commons", query: searchQuery, error, requestContinuation });
+  }
+
+  // Generator results are keyed by page id; `index` preserves search rank.
+  const pages = Object.values(data.query?.pages || {}).sort((a, b) => (a?.index ?? 0) - (b?.index ?? 0));
+  options.metrics?.increment("rawResults", pages.length);
 
   const results = [];
-  for (const page of Object.values(data.query.pages)) {
-    const info = page.imageinfo?.[0];
+  const malformed = [];
+  for (const page of pages) {
+    const info = page?.imageinfo?.[0];
+    // Without imageinfo the page is either not a file or its property data continues in the next response.
     if (!info?.url) continue;
+    if (typeof page.title !== "string" || page.pageid === undefined) {
+      malformed.push({ sourceItemId: page?.pageid ? String(page.pageid) : null, reason: "Commons page is missing title or pageid" });
+      options.metrics?.increment("normalizationFailures");
+      continue;
+    }
 
-    const meta = info.extmetadata || {};
-    const artist = cleanString(meta.Artist?.value?.replace(/<[^>]*>/g, "") || "", 80);
-    const desc = cleanString(meta.ImageDescription?.value?.replace(/<[^>]*>/g, "") || page.title.replace(/^File:/, ""), 240);
-    const mime = info.mime || "";
+    const meta = info.extmetadata && typeof info.extmetadata === "object" ? info.extmetadata : {};
+    const artist = metadataText(meta.Artist?.value, 80);
+    const desc = metadataText(meta.ImageDescription?.value, 240) || cleanString(page.title.replace(/^File:/, ""), 240);
+    const mime = typeof info.mime === "string" ? info.mime : "";
 
     const kind = classifyCommonsMediaKind(mime, info.url, info.mediatype);
     if (options.mediaType && kind !== options.mediaType) continue;
@@ -296,29 +384,54 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
     results.push(ucoItem);
   }
 
-  return results;
+  const { items, invalid } = normalizeSourceRecords(results, options);
+  const continuation = sanitizeMediaWikiContinuation(data.continue);
+  return createSourceBatch({
+    sourceId: "wikimedia-commons",
+    query: searchQuery,
+    items,
+    invalid: [...malformed, ...invalid],
+    rawCount: pages.length,
+    continuation,
+    exhausted: !continuation
+  });
 }
 
 // ---------------------------------------------------------------------------
 // 3. LIVE METROPOLITAN MUSEUM OF ART CONNECTOR (Available artwork images)
 // ---------------------------------------------------------------------------
-export async function searchMetMuseumLive(query, limit = 6) {
-  const cleanQ = encodeURIComponent(cleanString(query, 100));
-  const searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${cleanQ}`;
+// The Met search API returns every matching object ID in one response, so the
+// continuation is an index into that list.
+export async function searchMetMuseumLive(query, limit = 6, options = {}) {
+  const cleanQ = cleanString(query, 100);
+  const startIndex = Number.isInteger(options.continuation?.index) && options.continuation.index > 0 ? options.continuation.index : 0;
+  const requestContinuation = startIndex ? { index: startIndex } : null;
+  const searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(cleanQ)}`;
 
-  const searchData = await safeFetch(searchUrl);
-  if (!searchData?.objectIDs?.length) return [];
+  try {
+    const searchData = await sourceJson(searchUrl, options);
+    if (!searchData || typeof searchData !== "object" || (searchData.objectIDs !== null && searchData.objectIDs !== undefined && !Array.isArray(searchData.objectIDs))) {
+      throw new SourceRequestError("malformed", "Met search response has invalid objectIDs");
+    }
+    const allIds = searchData.objectIDs || [];
+    const objectIds = allIds.slice(startIndex, startIndex + limit);
+    options.metrics?.increment("rawResults", objectIds.length);
+    const results = [];
 
-  const objectIds = searchData.objectIDs.slice(0, limit);
-  const results = [];
+    for (const objId of objectIds) {
+      const objUrl = `https://collectionapi.metmuseum.org/public/collection/v1/objects/${encodeURIComponent(objId)}`;
+      let obj;
+      try {
+        obj = await sourceJson(objUrl, options);
+      } catch (error) {
+        // The Met search index contains IDs that no longer resolve; those are filtered, other failures fail the batch.
+        if (error?.status === 404) continue;
+        throw error;
+      }
 
-  for (const objId of objectIds) {
-    const objUrl = `https://collectionapi.metmuseum.org/public/collection/v1/objects/${objId}`;
-    const obj = await safeFetch(objUrl);
-
-    if (obj && obj.primaryImageSmall) {
-      const artist = obj.artistDisplayName || obj.culture || "Unknown Artisan";
-      const title = obj.title || "Museum Cultural Object";
+      if (obj && obj.primaryImageSmall) {
+        const artist = obj.artistDisplayName || obj.culture || "Unknown Artisan";
+        const title = obj.title || "Museum Cultural Object";
 
       const ucoItem = {
         id: `smithsonian-open-access:met-${obj.objectID}`,
@@ -362,58 +475,72 @@ export async function searchMetMuseumLive(query, limit = 6) {
     }
   }
 
-  return results;
+    const { items, invalid } = normalizeSourceRecords(results, options);
+    const nextIndex = startIndex + objectIds.length;
+    const exhausted = nextIndex >= allIds.length;
+    return createSourceBatch({
+      sourceId: "smithsonian-open-access",
+      query: cleanQ,
+      items,
+      invalid,
+      rawCount: objectIds.length,
+      continuation: exhausted ? null : { index: nextIndex },
+      exhausted
+    });
+  } catch (error) {
+    recordSourceFailure(options, error);
+    return failedSourceBatch({ sourceId: "smithsonian-open-access", query: cleanQ, error, requestContinuation });
+  }
 }
 
 // ---------------------------------------------------------------------------
 // 4. COMBINED LIVE CONNECTOR QUERY RUNNER
 // ---------------------------------------------------------------------------
+export const SOURCE_QUERY_VERSION = "source-query.v1";
+const LIVE_SOURCE_KEYS = Object.freeze({ wikipedia: "wikipedia", "wikimedia-commons": "wikimedia-commons", met: "smithsonian-open-access" });
+
+// Runs the requested live sources and returns one validated batch per source.
+// Failures are reported in the batches; fixture content is never substituted.
 export async function queryLiveConnectors(query, options = {}) {
-  const { sources = ["wikipedia", "wikimedia-commons", "met"], allowFixtureFallback = true } = options;
+  const { sources = ["wikipedia", "wikimedia-commons", "met"], continuations = {} } = options;
   const explicitLimit = Number.isInteger(options.limit) ? Math.max(1, options.limit) : null;
+  const shared = {
+    offset: options.offset,
+    metrics: options.metrics,
+    signal: options.signal,
+    deadline: options.deadline,
+    timeoutMs: options.timeoutMs,
+    maxRetries: options.maxRetries,
+    retryBaseDelayMs: options.retryBaseDelayMs
+  };
   const requests = [];
 
   if (sources.includes("wikipedia")) {
-    requests.push(searchWikipediaLive(query, explicitLimit ?? 6, { offset: options.offset, metrics: options.metrics }).catch(() => []));
+    requests.push(searchWikipediaLive(query, explicitLimit ?? 6, { ...shared, continuation: continuations.wikipedia }));
   }
   if (sources.includes("wikimedia-commons")) {
     requests.push(searchCommonsLive(query, explicitLimit ?? 12, {
-      offset: options.offset,
+      ...shared,
+      continuation: continuations["wikimedia-commons"],
       mediaType: options.mediaType,
       originalQuery: options.originalQuery,
-      searchContext: options.searchContext,
-      metrics: options.metrics
-    }).catch(() => []));
+      searchContext: options.searchContext
+    }));
   }
   if (sources.includes("met")) {
-    requests.push(searchMetMuseumLive(query, explicitLimit ?? 6).catch(() => []));
+    requests.push(searchMetMuseumLive(query, explicitLimit ?? 6, { ...shared, continuation: continuations[LIVE_SOURCE_KEYS.met] }));
   }
 
-  const liveCandidates = (await Promise.all(requests)).flat();
-
-  if (liveCandidates.length > 0) {
-    return liveCandidates.map((raw) => {
-      try {
-        const candidate = createUniversalContentObject(raw);
-        options.metrics?.increment("normalizedCandidates");
-        return candidate;
-      } catch {
-        options.metrics?.increment("normalizationFailures");
-        return raw;
-      }
-    });
-  }
-
-  if (!allowFixtureFallback) return [];
-
-  // Preserve the fixture-backed behavior for callers that explicitly allow it.
-  const tokens = cleanString(query, 80).toLowerCase().split(/\s+/);
-  const fallback = EPIC_C_RAW_ITEMS.filter((item) => {
-    const text = `${item.title} ${item.description} ${(item.topics || []).join(" ")}`.toLowerCase();
-    return tokens.some((t) => text.includes(t)) || text.includes("morocco");
-  }).map((raw) => createUniversalContentObject(raw));
-
-  return fallback.length ? fallback : EPIC_C_RAW_ITEMS.slice(0, 15).map((raw) => createUniversalContentObject(raw));
+  const batches = await Promise.all(requests);
+  const items = batches.flatMap((batch) => batch.items);
+  const result = Object.assign([...items], {
+    version: SOURCE_QUERY_VERSION,
+    batches: Object.freeze(batches),
+    items: Object.freeze(items),
+    failures: Object.freeze(batches.filter((batch) => batch.failure).map((batch) => ({ sourceId: batch.sourceId, ...batch.failure }))),
+    exhausted: batches.length > 0 && batches.every((batch) => batch.exhausted)
+  });
+  return Object.freeze(result);
 }
 
 // ---------------------------------------------------------------------------

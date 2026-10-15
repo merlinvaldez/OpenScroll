@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Compass, Globe2, Landmark, Music2, Sparkles, TreePine } from "lucide-react";
+import { Globe2, Landmark, Music2, Sparkles } from "lucide-react";
 
 const FEATURED_JOURNEYS = [
   {
@@ -37,7 +37,7 @@ const FEATURED_JOURNEYS = [
   }
 ];
 
-export function EditorialExplore({ onSelectJourney, messages, locale }) {
+export function EditorialExplore({ onSelectJourney, messages, locale: _locale }) {
   return (
     <div className="editorial-explore-screen">
       <header className="explore-header">
