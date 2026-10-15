@@ -180,9 +180,10 @@ export function createFeedContinuationState({
     planVersion: cleanString(planVersion, 40) || "search-plan.v1",
     searchPlan: searchPlan ? JSON.parse(JSON.stringify(searchPlan)) : null,
     evalConfig: evalConfig ? { ...evalConfig } : {
-      evaluator: "topic-engine.v1",
-      model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
-      threshold: 0.6
+      evaluator: "decisions.v1",
+      model: process.env.OPENAI_DECISIONS_MODEL || "gpt-6-luna",
+      threshold: 0.7,
+      promptVersion: "decisions-predicate.v1"
     },
     upstreamContinuations: {},
     exhaustedPairs: [],

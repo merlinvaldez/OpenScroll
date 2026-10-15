@@ -1,224 +1,109 @@
 import { cleanString, deepFreeze, slug, unique } from "./utils.js";
-import { abortError, fetchJsonWithRetry, getRequestBudgetConfig, isAbortError } from "./source-batch.js";
+import {
+  OPENAI_RESPONSES_URL,
+  DEFAULT_GENERATION_MODEL,
+  OpenAIConfigurationError,
+  OpenAIRequestError,
+  getGenerationConfig,
+  requestOpenAIStructuredOutput
+} from "./generation-adapter.js";
+import {
+  OPENAI_DECISIONS_URL,
+  DEFAULT_DECISIONS_MODEL,
+  SUPPORTED_DECISIONS_MODELS,
+  DEFAULT_DECISION_THRESHOLD,
+  DECISIONS_PROMPT_VERSION,
+  DECISION_VERSION,
+  UnsupportedDecisionsModelError,
+  getDecisionsConfig,
+  evaluateFeedCandidates,
+  generateRelevanceExplanation
+} from "./decisions-adapter.js";
 
-const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_OPENAI_MODEL = "gpt-4o";
+export {
+  OPENAI_RESPONSES_URL,
+  DEFAULT_GENERATION_MODEL,
+  OpenAIConfigurationError,
+  OpenAIRequestError,
+  getGenerationConfig,
+  requestOpenAIStructuredOutput,
+  OPENAI_DECISIONS_URL,
+  DEFAULT_DECISIONS_MODEL,
+  SUPPORTED_DECISIONS_MODELS,
+  DEFAULT_DECISION_THRESHOLD,
+  DECISIONS_PROMPT_VERSION,
+  DECISION_VERSION,
+  UnsupportedDecisionsModelError,
+  getDecisionsConfig,
+  evaluateFeedCandidates,
+  generateRelevanceExplanation
+};
 
-export class OpenAIConfigurationError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "OpenAIConfigurationError";
-    this.status = 503;
-  }
-}
-
-export class OpenAIRequestError extends Error {
-  constructor(message, status = 502) {
-    super(message);
-    this.name = "OpenAIRequestError";
-    this.status = status;
-  }
-}
-
-function getOpenAIConfig(options = {}) {
-  const apiKey = options.apiKey || (typeof process !== "undefined" ? process.env?.OPENAI_API_KEY : "");
-  const model = options.model || (typeof process !== "undefined" ? process.env?.OPENAI_MODEL : "") || DEFAULT_OPENAI_MODEL;
-
-  if (!apiKey || !apiKey.trim()) {
-    throw new OpenAIConfigurationError("OPENAI_API_KEY is required for OpenScroll AI generation.");
-  }
-
-  return { apiKey: apiKey.trim(), model: model.trim() || DEFAULT_OPENAI_MODEL };
-}
-
-async function requestOpenAIJson(messages, options = {}) {
-  try {
-    return await requestOpenAIJsonMeasured(messages, options);
-  } catch (error) {
-    options.metrics?.increment("aiFailures");
-    throw error;
-  }
-}
-
-async function requestOpenAIJsonMeasured(messages, options = {}) {
-  const { apiKey, model } = getOpenAIConfig(options);
-
-  if (typeof fetch !== "function") {
-    throw new OpenAIConfigurationError("The server cannot reach OpenAI because fetch is unavailable.");
-  }
-
-  const budget = getRequestBudgetConfig();
-  let payload;
-  try {
-    payload = await fetchJsonWithRetry(OPENAI_CHAT_COMPLETIONS_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        response_format: { type: "json_object" }
-      }),
-      signal: options.signal,
-      deadline: options.deadline,
-      timeoutMs: options.aiTimeoutMs ?? budget.aiTimeoutMs,
-      maxRetries: options.aiMaxRetries ?? budget.aiMaxRetries,
-      baseDelayMs: options.retryBaseDelayMs,
-      onAttempt: () => options.metrics?.increment("aiCalls"),
-      onRetry: () => options.metrics?.increment("aiRetries")
-    });
-  } catch (error) {
-    if (isAbortError(error)) throw abortError();
-    const status = Number.isInteger(error?.status) ? error.status : error?.kind === "timeout" ? 504 : 502;
-    const message = error?.kind === "malformed" ? `OpenAI returned an invalid response (${status}).` : `OpenAI request failed: ${error?.message || "unknown error"}`;
-    const failure = new OpenAIRequestError(message, status);
-    failure.kind = error?.kind || "network";
-    failure.retryable = Boolean(error?.retryable);
-    throw failure;
-  }
-  options.metrics?.addUsage(payload, model);
-
-  const raw = payload?.choices?.[0]?.message?.content;
-  if (typeof raw !== "string" || !raw.trim()) {
-    throw new OpenAIRequestError("OpenAI returned no JSON content.");
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new OpenAIRequestError("OpenAI returned invalid JSON content.");
-  }
-}
-
-function evaluationCandidate(candidate, index) {
-  return {
-    candidateIndex: index,
-    title: cleanString(candidate.content?.title || candidate.title, 160),
-    description: cleanString(candidate.content?.description || candidate.description, 300),
-    topics: unique([
-      ...(candidate.knowledge?.topics || []),
-      ...(candidate.content?.topics || []),
-      ...(candidate.topics || [])
-    ]).map((topic) => cleanString(topic, 120)).filter(Boolean).slice(0, 12),
-    retrieval: candidate.knowledge?.retrieval ? {
-      originalQuery: cleanString(candidate.knowledge.retrieval.originalQuery, 160),
-      query: cleanString(candidate.knowledge.retrieval.query, 160),
-      strategy: cleanString(candidate.knowledge.retrieval.strategy, 80),
-      entity: cleanString(candidate.knowledge.retrieval.entity, 160),
-      categories: unique((candidate.knowledge.retrieval.categories || []).map((category) => cleanString(category, 120))).slice(0, 12),
-      objectName: cleanString(candidate.knowledge.retrieval.objectName, 180)
-    } : null,
-    source: cleanString(candidate.source?.name || candidate.source?.id || candidate.sourceId, 100),
-    mediaKind: cleanString(candidate.media?.kind || candidate.content?.type, 60)
-  };
-}
-
-export async function evaluateFeedCandidates(term, candidates, options = {}) {
-  const cleanTerm = cleanString(term, 160);
-  if (!cleanTerm || !Array.isArray(candidates) || !candidates.length) {
-    return { accepted: [], evaluations: [] };
-  }
-
-  const candidateSummary = candidates.map(evaluationCandidate);
-  const payload = await requestOpenAIJson([
-    {
-      role: "system",
-      content: "You are OpenScroll's strict feed relevance evaluator. Output JSON only."
-    },
-    {
-      role: "user",
-      content: `Evaluate whether each candidate is semantically relevant to the search term "${cleanTerm}".
-
-A candidate passes only when it is meaningfully about the search term. Reject incidental keyword matches, generic images, loosely associated people or places, and candidates whose relevance depends only on the source name. Use the title and description as evidence. Retrieval metadata explains how the candidate was found, but is not proof of relevance by itself. Prefer a precise semantic match over a broad cultural association.
-
-Return exactly one evaluation for every candidate index in the input, with this JSON shape:
-{
-  "evaluations": [
-    {
-      "candidateIndex": 0,
-      "termRelated": true,
-      "pass": true,
-      "reason": "Short evidence-based explanation."
+const ENTITY_SCHEMA = Object.freeze({
+  type: "object",
+  properties: {
+    label: { type: "string" },
+    description: { type: "string" },
+    aliases: {
+      type: "array",
+      items: { type: "string" }
     }
-  ]
-}
-
-Candidates:
-${JSON.stringify(candidateSummary)}`
-    }
-  ], options);
-
-  if (!Array.isArray(payload?.evaluations) || payload.evaluations.length !== candidates.length) {
-    throw new OpenAIRequestError("OpenAI returned an incomplete feed evaluation.");
-  }
-
-  const evaluations = new Array(candidates.length);
-  for (const evaluation of payload.evaluations) {
-    const index = evaluation?.candidateIndex;
-    if (!Number.isInteger(index) || index < 0 || index >= candidates.length || evaluations[index]) {
-      throw new OpenAIRequestError("OpenAI returned invalid feed evaluation indexes.");
-    }
-    if (typeof evaluation.termRelated !== "boolean" || typeof evaluation.pass !== "boolean" || !cleanString(evaluation.reason, 300)) {
-      throw new OpenAIRequestError("OpenAI returned an invalid feed evaluation.");
-    }
-
-    evaluations[index] = {
-      candidateIndex: index,
-      termRelated: evaluation.termRelated,
-      pass: evaluation.pass,
-      reason: cleanString(evaluation.reason, 300)
-    };
-  }
-
-  if (evaluations.some((evaluation) => !evaluation)) {
-    throw new OpenAIRequestError("OpenAI did not evaluate every feed candidate.");
-  }
-
-  return {
-    evaluations,
-    accepted: candidates.filter((_, index) => evaluations[index].termRelated && evaluations[index].pass)
-  };
-}
-
-function buildMindmapPrompt(query) {
-  return `You are OpenScroll's knowledge graph engine. Analyze the concept "${query}" and return a precise, globally aware semantic knowledge graph.
-
-Return valid JSON only with this exact shape:
-{
-  "entity": {
-    "label": "Canonical Name of Concept",
-    "description": "Engaging 1-2 sentence overview of the concept and its global significance.",
-    "aliases": ["Alternative Name 1", "Alternative Name 2"]
   },
-  "categories": [
-    {
-      "categoryId": "short-kebab-case-id",
-      "categoryLabel": "Generated category name",
-      "categoryDescription": "Why this category matters for the query.",
-      "icon": "sparkles",
-      "color": "#ec4899",
-      "topics": [
-        { "name": "Specific Movement or Style", "description": "One accurate sentence.", "weight": 1.0, "icon": "palette" }
-      ]
+  required: ["label", "description", "aliases"],
+  additionalProperties: false
+});
+
+const MINDMAP_SCHEMA = Object.freeze({
+  type: "object",
+  properties: {
+    entity: {
+      type: "object",
+      properties: {
+        label: { type: "string" },
+        description: { type: "string" },
+        aliases: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["label", "description", "aliases"],
+      additionalProperties: false
+    },
+    categories: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          categoryId: { type: "string" },
+          categoryLabel: { type: "string" },
+          categoryDescription: { type: "string" },
+          icon: { type: "string" },
+          color: { type: "string" },
+          topics: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                description: { type: "string" },
+                weight: { type: "number" },
+                icon: { type: "string" }
+              },
+              required: ["name", "description", "weight", "icon"],
+              additionalProperties: false
+            }
+          }
+        },
+        required: ["categoryId", "categoryLabel", "categoryDescription", "icon", "color", "topics"],
+        additionalProperties: false
+      }
     }
-  ]
-}
+  },
+  required: ["entity", "categories"],
+  additionalProperties: false
+});
 
-Choose 4 to 7 categories based on this query. Generate the category IDs, labels, and descriptions for this query; do not use a fixed taxonomy or force generic categories such as arts, history, places, or science when they are not relevant. Each category must contain 3 to 5 specific, real, accurate, deeply relevant topics. Do not use generic placeholders. Keep descriptions concise. Ensure every category and topic is generated for the query and every topic has name, description, weight, and icon.`;
-}
-
-function buildEntityPrompt(query) {
-  return `Resolve the concept "${query}" into its canonical knowledge entity. Return valid JSON only with this exact shape:
-{
-  "label": "Canonical Name of Concept",
-  "description": "Accurate 1-2 sentence overview.",
-  "aliases": ["Alternative Name 1", "Alternative Name 2"]
-}`;
-}
-
-function validateEntity(entity) {
+export function validateEntity(entity) {
   if (!entity || typeof entity !== "object" || !cleanString(entity.label, 160) || !cleanString(entity.description, 500) || !Array.isArray(entity.aliases)) {
     throw new OpenAIRequestError("OpenAI returned an invalid knowledge entity.");
   }
@@ -231,7 +116,7 @@ function validateEntity(entity) {
   };
 }
 
-function validateCategories(categories) {
+export function validateCategories(categories) {
   if (!Array.isArray(categories) || categories.length < 4 || categories.length > 7) {
     throw new OpenAIRequestError("OpenAI returned an incomplete knowledge graph.");
   }
@@ -270,24 +155,34 @@ function validateCategories(categories) {
   });
 }
 
-export async function generateMindmapWithOpenAI(query, apiKey, model) {
+export async function generateMindmapWithOpenAI(query, apiKey, model, options = {}) {
   const cleanQuery = cleanString(query, 120);
   if (!cleanQuery) throw new OpenAIRequestError("A topic query is required.", 400);
 
-  return requestOpenAIJson([
-    { role: "system", content: "You are a specialized semantic knowledge graph engine. Output JSON only." },
-    { role: "user", content: buildMindmapPrompt(cleanQuery) }
-  ], { apiKey, model });
+  const prompt = `Analyze the concept "${cleanQuery}" and return a precise, globally aware semantic knowledge graph with 4 to 7 categories.
+Generate the category IDs, labels, and descriptions for this query; do not use a fixed taxonomy or force generic categories such as arts, history, places, or science when they are not relevant.
+Each category must contain 3 to 5 specific, real, accurate, deeply relevant topics. Do not use generic placeholders. Keep descriptions concise. Ensure every category and topic is generated for the query and every topic has name, description, weight, and icon.`;
+
+  return requestOpenAIStructuredOutput({
+    name: "topic_expansion",
+    instructions: "You are OpenScroll's semantic knowledge graph engine. Generate query-specific, rich conceptual categories and topics.",
+    input: prompt,
+    schema: MINDMAP_SCHEMA,
+    reasoningEffort: options.reasoningEffort ?? "none"
+  }, { ...options, apiKey, model });
 }
 
 export async function resolveEntity(query, options = {}) {
   const cleanQuery = cleanString(query, 120);
   if (!cleanQuery) return null;
 
-  const entity = await requestOpenAIJson([
-    { role: "system", content: "You are a precise entity-resolution engine. Output JSON only." },
-    { role: "user", content: buildEntityPrompt(cleanQuery) }
-  ], options);
+  const entity = await requestOpenAIStructuredOutput({
+    name: "entity_resolution",
+    instructions: "You are a precise entity-resolution engine. Resolve the provided concept into its canonical knowledge entity with label, engaging description, and alternative names.",
+    input: `Resolve the concept "${cleanQuery}" into its canonical knowledge entity.`,
+    schema: ENTITY_SCHEMA,
+    reasoningEffort: options.reasoningEffort ?? "none"
+  }, options);
 
   return deepFreeze(validateEntity(entity));
 }
@@ -296,8 +191,8 @@ export async function expandTopics(query, options = {}) {
   const cleanQuery = cleanString(query, 120);
   if (!cleanQuery) throw new OpenAIRequestError("A topic query is required.", 400);
 
-  const { model } = getOpenAIConfig(options);
-  const aiData = await generateMindmapWithOpenAI(cleanQuery, options.apiKey, model);
+  const { model } = getGenerationConfig(options);
+  const aiData = await generateMindmapWithOpenAI(cleanQuery, options.apiKey, model, options);
   const entity = validateEntity(aiData.entity);
   const categories = validateCategories(aiData.categories);
   const flatTopics = categories.flatMap((category) =>

@@ -193,15 +193,31 @@ async function fetchPassingSearchResults({
       detail: `Evaluating ${freshCandidates.length} new candidates`
     });
     metrics.capture(freshCandidates);
-    const evaluation = await metrics.measure("evaluation", () => evaluateFeedCandidates(term, freshCandidates, { metrics }));
-    metrics.increment("evaluated", freshCandidates.length);
+    const evaluation = await metrics.measure("evaluation", () => evaluateFeedCandidates(term, freshCandidates, {
+      metrics,
+      topicMeaning: state.topicMeaning,
+      evalConfig: state.evalConfig,
+      signal,
+      deadline
+    }));
+    const unevaluatedCount = evaluation.unevaluated?.length || 0;
+    const evaluatedTotal = freshCandidates.length - unevaluatedCount;
+    metrics.increment("evaluated", evaluatedTotal);
     metrics.increment("accepted", evaluation.accepted.length);
-    metrics.increment("rejected", freshCandidates.length - evaluation.accepted.length);
-    evaluatedCount += freshCandidates.length;
+    metrics.increment("rejected", Math.max(0, evaluatedTotal - evaluation.accepted.length));
+    if (unevaluatedCount > 0) {
+      metrics.increment("unevaluated", unevaluatedCount);
+    }
+    evaluatedCount += evaluatedTotal;
 
     for (const candidate of evaluation.accepted) {
       if (candidate?.id) {
-        state.candidateCache[candidate.id] = { accepted: true, evaluatedAt: Date.now() };
+        state.candidateCache[candidate.id] = {
+          accepted: true,
+          probability: candidate.decision?.probability ?? 1,
+          provenance: candidate.decision?.provenance,
+          evaluatedAt: Date.now()
+        };
       }
       const mediaType = mediaTypes.find((type) => candidateMatchesMediaType(candidate, type));
       if (mediaType && (acceptedThisFetch.length < neededCount)) {
@@ -212,6 +228,21 @@ async function fetchPassingSearchResults({
         state.pendingAccepted.push(candidate);
         metrics.increment("retained");
         metrics.increment("pending");
+      }
+    }
+
+    // Cache definitively rejected candidates; leave unevaluated retryable
+    for (const ev of (evaluation.evaluations || [])) {
+      if (ev && !ev.unevaluated && !ev.accepted) {
+        const candidate = freshCandidates[ev.candidateIndex];
+        if (candidate?.id && !state.candidateCache[candidate.id]) {
+          state.candidateCache[candidate.id] = {
+            accepted: false,
+            probability: ev.probability,
+            provenance: ev.provenance,
+            evaluatedAt: Date.now()
+          };
+        }
       }
     }
 

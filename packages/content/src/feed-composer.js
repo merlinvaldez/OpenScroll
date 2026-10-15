@@ -112,6 +112,12 @@ export function scoreCandidate(candidate, interestGraph = {}, feedback = []) {
   if (candidate.media?.url) score += 0.2;
   if (candidate.media?.accessibility?.transcript || candidate.media?.accessibility?.captions) score += 0.1;
 
+  // Preserve and factor Decisions relevance probability for ranking
+  const relevanceProbability = candidate.ranking?.relevanceProbability ?? candidate.decision?.probability;
+  if (Number.isFinite(relevanceProbability)) {
+    score += relevanceProbability * 0.5;
+  }
+
   return score;
 }
 

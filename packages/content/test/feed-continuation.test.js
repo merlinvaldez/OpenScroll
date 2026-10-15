@@ -150,37 +150,44 @@ test("feed composition preserves overflow in pendingAccepted and fulfills next p
   const prevKey = process.env.OPENAI_API_KEY;
   const prevModel = process.env.OPENAI_MODEL;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.OPENAI_MODEL = "test-model";
+  process.env.OPENAI_MODEL = "gpt-6-luna";
 
   const store = new MemoryFeedContinuationStore();
   let aiCallCount = 0;
   let sourceCallCount = 0;
 
   globalThis.fetch = async (url, init = {}) => {
-    if (url === "https://api.openai.com/v1/chat/completions") {
+    if (url === "https://api.openai.com/v1/responses") {
+      aiCallCount += 1;
+      return mockResponse({
+        id: "resp_entity",
+        status: "completed",
+        model: "gpt-6-luna",
+        output: [{
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [{
+            type: "output_text",
+            text: JSON.stringify({ label: "Gnawa", description: "Music tradition", aliases: ["Gnaoua"] })
+          }]
+        }],
+        usage: { input_tokens: 20, output_tokens: 15, total_tokens: 35 }
+      });
+    }
+
+    if (url === "https://api.openai.com/v1/decisions") {
       aiCallCount += 1;
       const body = JSON.parse(init.body);
-      const prompt = body.messages[1].content;
-      if (prompt.includes("Resolve the concept")) {
-        return mockResponse({
-          choices: [{ message: { content: JSON.stringify({ label: "Gnawa", description: "Music tradition", aliases: ["Gnaoua"] }) } }]
-        });
-      }
-      const candidateJson = prompt.split("Candidates:\n")[1];
-      const candidates = JSON.parse(candidateJson);
+      const answers = (body.questions || []).map((q) => ({
+        type: "predicate",
+        name: q.name,
+        probability: 0.95
+      }));
       return mockResponse({
-        choices: [{
-          message: {
-            content: JSON.stringify({
-              evaluations: candidates.map((_, index) => ({
-                candidateIndex: index,
-                termRelated: true,
-                pass: true,
-                reason: "Direct match"
-              }))
-            })
-          }
-        }]
+        model: "gpt-6-luna",
+        answers,
+        usage: { input_tokens: 40, output_tokens: 0, total_tokens: 40 }
       });
     }
 

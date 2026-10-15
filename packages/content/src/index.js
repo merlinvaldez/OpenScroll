@@ -20,7 +20,25 @@ export {
   validateFeedCandidate,
   validateSourceBatch
 } from "./source-batch.js";
-export { expandTopics, resolveEntity, evaluateFeedCandidates, buildQueryPlan } from "./topic-engine.js";
+export {
+  expandTopics,
+  resolveEntity,
+  evaluateFeedCandidates,
+  generateRelevanceExplanation,
+  buildQueryPlan,
+  OPENAI_RESPONSES_URL,
+  DEFAULT_GENERATION_MODEL,
+  OPENAI_DECISIONS_URL,
+  DEFAULT_DECISIONS_MODEL,
+  SUPPORTED_DECISIONS_MODELS,
+  DEFAULT_DECISION_THRESHOLD,
+  DECISIONS_PROMPT_VERSION,
+  DECISION_VERSION,
+  UnsupportedDecisionsModelError,
+  getGenerationConfig,
+  getDecisionsConfig,
+  requestOpenAIStructuredOutput
+} from "./topic-engine.js";
 export { composeDiversityFeed, deduplicateCandidates, scoreCandidate } from "./feed-composer.js";
 export { buildCommonsSearchPlan, buildSearchPlans } from "./search-planner.js";
 export { composeSearchFeed, FEED_MEDIA_TYPE_KINDS, FEED_MEDIA_TYPE_SOURCES } from "./feed-search.js";

@@ -18,34 +18,39 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
   const phases = [];
   let metrics;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.OPENAI_MODEL = "test-model";
+  process.env.OPENAI_MODEL = "gpt-6-luna";
 
   globalThis.fetch = async (url, init = {}) => {
     requests.push({ url, init });
-    if (url === "https://api.openai.com/v1/chat/completions") {
-      const body = JSON.parse(init.body);
-      const prompt = body.messages[1].content;
-      if (prompt.includes("Resolve the concept")) {
-        return mockResponse({
-          choices: [{ message: { content: JSON.stringify({ label: "Gnawa", description: "A music tradition.", aliases: ["Gnaoua"] }) } }]
-        });
-      }
-
-      const candidateJson = prompt.split("Candidates:\n")[1];
-      const candidates = JSON.parse(candidateJson);
+    if (url === "https://api.openai.com/v1/responses") {
       return mockResponse({
-        choices: [{
-          message: {
-            content: JSON.stringify({
-              evaluations: candidates.map((_, index) => ({
-                candidateIndex: index,
-                termRelated: true,
-                pass: true,
-                reason: "The candidate matches the requested topic."
-              }))
-            })
-          }
-        }]
+        id: "resp_entity",
+        status: "completed",
+        model: "gpt-6-luna",
+        output: [{
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [{
+            type: "output_text",
+            text: JSON.stringify({ label: "Gnawa", description: "A music tradition.", aliases: ["Gnaoua"] })
+          }]
+        }],
+        usage: { input_tokens: 20, output_tokens: 15, total_tokens: 35 }
+      });
+    }
+
+    if (url === "https://api.openai.com/v1/decisions") {
+      const body = JSON.parse(init.body);
+      const answers = (body.questions || []).map((q) => ({
+        type: "predicate",
+        name: q.name,
+        probability: 0.95
+      }));
+      return mockResponse({
+        model: "gpt-6-luna",
+        answers,
+        usage: { input_tokens: 40, output_tokens: 0, total_tokens: 40 }
       });
     }
 
@@ -76,7 +81,8 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
       onMetrics: (value) => { metrics = value; }
     });
 
-    assert.ok(requests.filter((request) => request.url === "https://api.openai.com/v1/chat/completions").length >= 2);
+    assert.equal(requests.filter((request) => request.url === "https://api.openai.com/v1/responses").length, 1);
+    assert.equal(requests.filter((request) => request.url === "https://api.openai.com/v1/decisions").length, 1);
     assert.ok(result.searchPlan.variants.images.length >= 4);
     assert.ok(result.items.length > 0);
     assert.deepEqual([...new Set(phases)], ["planning", "retrieving", "evaluating", "composing"]);

@@ -5,7 +5,7 @@ export function createFeedMetrics({ now = () => performance.now(), onCandidates 
   const counters = {
     sourceCalls: 0, sourceFailures: 0, rawResults: 0, normalizedCandidates: 0,
     normalizationFailures: 0, duplicates: 0, invalidCandidates: 0,
-    evaluated: 0, accepted: 0, rejected: 0, retained: 0, droppedAccepted: 0,
+    evaluated: 0, accepted: 0, rejected: 0, unevaluated: 0, retained: 0, droppedAccepted: 0,
     pending: 0, compositionExcluded: 0, visible: 0, rounds: 0,
     aiCalls: 0, aiFailures: 0, pipelineFailures: 0, cacheHits: 0, planReuses: 0
   };
@@ -27,9 +27,9 @@ export function createFeedMetrics({ now = () => performance.now(), onCandidates 
       models.add(payload?.model || requestedModel);
       if (!payload?.usage) return;
       usage.responsesWithUsage += 1;
-      usage.promptTokens += payload.usage.prompt_tokens || 0;
-      usage.completionTokens += payload.usage.completion_tokens || 0;
-      usage.cachedPromptTokens += payload.usage.prompt_tokens_details?.cached_tokens || 0;
+      usage.promptTokens += payload.usage.prompt_tokens || payload.usage.input_tokens || 0;
+      usage.completionTokens += payload.usage.completion_tokens || payload.usage.output_tokens || 0;
+      usage.cachedPromptTokens += payload.usage.prompt_tokens_details?.cached_tokens || payload.usage.input_tokens_details?.cached_tokens || 0;
     },
     capture(candidates) { try { onCandidates?.(candidates); } catch { /* observer failure is isolated */ } },
     snapshot(status = "ok") {
