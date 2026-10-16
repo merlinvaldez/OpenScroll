@@ -228,6 +228,10 @@ export class FileFeedContinuationStore {
   async _resolveStoreDir() {
     if (this.storeDir) return this.storeDir;
     const pathMod = await getPath();
+    if (typeof process !== "undefined" && (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)) {
+      this.storeDir = pathMod.join("/tmp", "feed-sessions");
+      return this.storeDir;
+    }
     const cwd = typeof process !== "undefined" && typeof process.cwd === "function" ? process.cwd() : ".";
     this.storeDir = pathMod.join(cwd, ".openscroll", "feed-sessions");
     return this.storeDir;
