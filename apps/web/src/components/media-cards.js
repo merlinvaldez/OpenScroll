@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   BookOpen,
   Compass,
@@ -9,36 +9,135 @@ import {
   Info,
   Music,
   Pause,
-  Play
+  Play,
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { IconButton } from "./primitives";
 
 export const MEDIA_STOP_EVENT = "openscroll:stop-media";
 export const MEDIA_AUTOPLAY_EVENT = "openscroll:autoplay-media";
 
-function CardFrame({ className, children, showChrome, onToggleChrome }) {
+export const ChromeContext = createContext({
+  isChromeHidden: false,
+  fadedOut: false,
+  manualHidden: false,
+  revealChrome: () => {},
+  hideChrome: () => {}
+});
 
-  function toggleChrome(event) {
+function CardFrame({
+  className = "",
+  children,
+  showChrome = true,
+  _onToggleChrome,
+  autoFade = true,
+  isPaused = false
+}) {
+  const [fadedOut, setFadedOut] = useState(false);
+  const [manualHidden, setManualHidden] = useState(false);
+  const cardRef = useRef(null);
+  const fadeTimerRef = useRef(null);
+  const isIntersectingRef = useRef(false);
+
+  const revealChrome = () => {
+    setFadedOut(false);
+    setManualHidden(false);
+    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    if (autoFade && !isPaused && isIntersectingRef.current) {
+      fadeTimerRef.current = setTimeout(() => {
+        if (isIntersectingRef.current) {
+          setFadedOut(true);
+        }
+      }, 5000);
+    }
+  };
+
+  const hideChrome = () => {
+    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+    setManualHidden(true);
+  };
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return undefined;
+
+    const startTimer = () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+      setManualHidden(false);
+      if (!autoFade || isPaused) {
+        setFadedOut(false);
+        return;
+      }
+      setFadedOut(false);
+      fadeTimerRef.current = setTimeout(() => {
+        if (isIntersectingRef.current) {
+          setFadedOut(true);
+        }
+      }, 5000);
+    };
+
+    const stopTimer = () => {
+      if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current);
+      setFadedOut(false);
+      setManualHidden(false);
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = entry.isIntersecting && entry.intersectionRatio >= 0.6;
+        isIntersectingRef.current = isVisible;
+        if (isVisible) {
+          startTimer();
+        } else {
+          stopTimer();
+        }
+      },
+      { root: el.closest(".feed"), threshold: [0, 0.6] }
+    );
+
+    observer.observe(el);
+
+    if (isIntersectingRef.current) {
+      startTimer();
+    }
+
+    return () => {
+      stopTimer();
+      observer.disconnect();
+    };
+  }, [autoFade, isPaused]);
+
+  function handleCardClick(event) {
     if (event.target.closest("button, a, input, select, textarea, summary")) return;
-    onToggleChrome();
+    if (manualHidden || fadedOut) {
+      revealChrome();
+    } else {
+      hideChrome();
+    }
   }
 
   function handleKeyDown(event) {
     if (event.target.closest("button, a, input, select, textarea, summary")) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    onToggleChrome();
+    handleCardClick(event);
   }
 
+  const isChromeHidden = !showChrome || manualHidden || (autoFade && fadedOut);
+
   return (
-    <article
-      className={`feed-card ${className} ${showChrome ? "" : "feed-card--chrome-hidden"}`}
-      tabIndex="0"
-      onClick={toggleChrome}
-      onKeyDown={handleKeyDown}
-    >
-      {children}
-    </article>
+    <ChromeContext.Provider value={{ isChromeHidden, fadedOut, manualHidden, revealChrome, hideChrome }}>
+      <article
+        ref={cardRef}
+        className={`feed-card ${className} ${isChromeHidden ? "feed-card--chrome-hidden" : ""}`}
+        tabIndex="0"
+        onClick={handleCardClick}
+        onKeyDown={handleKeyDown}
+      >
+        {children}
+      </article>
+    </ChromeContext.Provider>
   );
 }
 
@@ -83,7 +182,7 @@ export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
   }, [card.id, card.object?.media?.thumbnailUrl, card.object?.media?.url, card.downloadUrl]);
 
   return (
-    <CardFrame className="feed-card--image" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+    <CardFrame className="feed-card--image" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={true}>
       <div className="media-stage image-stage">
         {currentSrc ? (
           <img
@@ -232,19 +331,17 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
       try {
         await audio.play();
         if (!audio.paused) setIsPlaying(true);
-        onToggleChrome();
       } catch {
         setIsPlaying(false);
       }
     } else {
       audio.pause();
       setIsPlaying(false);
-      onToggleChrome();
     }
   }
 
   return (
-    <CardFrame className="feed-card--audio" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+    <CardFrame className="feed-card--audio" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={true} isPaused={!isPlaying}>
       <div className="media-stage audio-stage">
         <button
           type="button"
@@ -336,9 +433,118 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
   );
 }
 
+let feedAudioUnlocked = true;
+
+function VideoStage({
+  videoRef,
+  sources,
+  videoUrl,
+  thumbnailUrl,
+  isPlaying,
+  setIsPlaying,
+  isMuted,
+  setIsMuted,
+  mediaError,
+  setMediaError,
+  media,
+  messages,
+  toggleMute
+}) {
+  const { isChromeHidden, revealChrome } = useContext(ChromeContext);
+
+  async function togglePlay(event) {
+    event?.stopPropagation();
+    const video = videoRef.current;
+    if (!video || mediaError) return;
+
+    if (isChromeHidden) {
+      revealChrome();
+      return;
+    }
+
+    if (video.paused) {
+      feedAudioUnlocked = true;
+      video.muted = false;
+      video.volume = 1;
+      setIsMuted(false);
+      try {
+        await video.play();
+        if (!video.paused) setIsPlaying(true);
+      } catch {
+        try {
+          video.muted = true;
+          setIsMuted(true);
+          await video.play();
+          if (!video.paused) setIsPlaying(true);
+        } catch {
+          setIsPlaying(false);
+        }
+      }
+    } else {
+      video.pause();
+      setIsPlaying(false);
+    }
+  }
+
+  return (
+    <div className="media-stage video-stage" onClick={togglePlay}>
+      <video
+        ref={videoRef}
+        className="stage-video"
+        src={sources.length ? undefined : (videoUrl || undefined)}
+        poster={thumbnailUrl || undefined}
+        preload="metadata"
+        playsInline
+        loop
+        onClick={togglePlay}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        onVolumeChange={() => setIsMuted(Boolean(videoRef.current?.muted))}
+        onError={() => {
+          if (videoRef.current?.error) {
+            setMediaError(true);
+            setIsPlaying(false);
+          }
+        }}
+      >
+        {sources.map((s, idx) => (
+          <source key={idx} src={s.src} type={s.type} />
+        ))}
+        {videoUrl && !sources.some((s) => s.src === videoUrl) ? (
+          <source src={videoUrl} type={media.mimeType || "video/mp4"} />
+        ) : null}
+      </video>
+      {!isPlaying ? (
+        <button
+          type="button"
+          className="video-play-btn"
+          onClick={togglePlay}
+          aria-label={messages.playVideo}
+          disabled={mediaError}
+        >
+          <Play size={28} aria-hidden="true" />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className="video-mute-btn"
+        onClick={toggleMute}
+        aria-label={isMuted ? messages.unmuteVideo : messages.muteVideo}
+        title={isMuted ? messages.unmuteVideo : messages.muteVideo}
+        disabled={mediaError}
+      >
+        {isMuted ? <VolumeX size={20} aria-hidden="true" /> : <Volume2 size={20} aria-hidden="true" />}
+      </button>
+      {mediaError ? <p className="media-error">{messages.mediaUnavailable}</p> : null}
+    </div>
+  );
+}
+
 export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [mediaError, setMediaError] = useState(false);
+  const [isMuted, setIsMuted] = useState(!feedAudioUnlocked);
   const videoRef = useRef(null);
   const videoVisibleRef = useRef(false);
   const media = card.object?.media || {};
@@ -369,12 +575,30 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
 
     const playIfVisible = async () => {
       if (!videoVisibleRef.current || mediaError) return;
-      video.muted = true;
+      const targetMuted = !feedAudioUnlocked;
+      video.muted = targetMuted;
+      video.volume = 1;
       try {
         await video.play();
-        if (!video.paused) setIsPlaying(true);
+        if (!video.paused) {
+          setIsPlaying(true);
+          setIsMuted(video.muted);
+        }
       } catch {
-        video.pause();
+        if (!video.muted) {
+          try {
+            video.muted = true;
+            setIsMuted(true);
+            await video.play();
+            if (!video.paused) setIsPlaying(true);
+          } catch {
+            video.pause();
+            setIsPlaying(false);
+          }
+        } else {
+          video.pause();
+          setIsPlaying(false);
+        }
       }
     };
 
@@ -417,77 +641,45 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
     return () => window.removeEventListener(MEDIA_STOP_EVENT, stopPlayback);
   }, []);
 
-  async function togglePlay(event) {
+  function toggleMute(event) {
     event?.stopPropagation();
     const video = videoRef.current;
-    if (!video || mediaError) return;
+    if (!video) return;
 
-    if (video.paused) {
-      video.muted = false;
+    const nextMuted = !video.muted;
+    video.muted = nextMuted;
+    if (!nextMuted) {
       video.volume = 1;
-      try {
-        await video.play();
-        if (!video.paused) setIsPlaying(true);
-        onToggleChrome();
-      } catch {
-        try {
-          video.muted = true;
-          await video.play();
-          if (!video.paused) setIsPlaying(true);
-          onToggleChrome();
-        } catch {
-          setIsPlaying(false);
-        }
-      }
+      feedAudioUnlocked = true;
     } else {
-      video.pause();
-      setIsPlaying(false);
-      onToggleChrome();
+      feedAudioUnlocked = false;
     }
+    setIsMuted(nextMuted);
   }
 
   return (
-    <CardFrame className={`feed-card--video ${isPlaying ? "feed-card--playing" : ""}`} showChrome={showChrome} onToggleChrome={onToggleChrome}>
-      <div className="media-stage video-stage" onClick={togglePlay}>
-        <video
-          ref={videoRef}
-          className="stage-video"
-          src={sources.length ? undefined : (videoUrl || undefined)}
-          poster={thumbnailUrl || undefined}
-          preload="metadata"
-          playsInline
-          loop
-          onClick={togglePlay}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => setIsPlaying(false)}
-          onError={() => {
-            if (videoRef.current?.error) {
-              setMediaError(true);
-              setIsPlaying(false);
-            }
-          }}
-        >
-          {sources.map((s, idx) => (
-            <source key={idx} src={s.src} type={s.type} />
-          ))}
-          {videoUrl && !sources.some((s) => s.src === videoUrl) ? (
-            <source src={videoUrl} type={media.mimeType || "video/mp4"} />
-          ) : null}
-        </video>
-        {!isPlaying ? (
-          <button
-            type="button"
-            className="video-play-btn"
-            onClick={togglePlay}
-            aria-label={messages.playVideo}
-            disabled={mediaError}
-          >
-            <Play size={28} aria-hidden="true" />
-          </button>
-        ) : null}
-        {mediaError ? <p className="media-error">{messages.mediaUnavailable}</p> : null}
-      </div>
+    <CardFrame
+      className={`feed-card--video ${isPlaying ? "feed-card--playing" : ""}`}
+      showChrome={showChrome}
+      onToggleChrome={onToggleChrome}
+      autoFade={true}
+      isPaused={!isPlaying}
+    >
+      <VideoStage
+        videoRef={videoRef}
+        sources={sources}
+        videoUrl={videoUrl}
+        thumbnailUrl={thumbnailUrl}
+        isPlaying={isPlaying}
+        setIsPlaying={setIsPlaying}
+        isMuted={isMuted}
+        setIsMuted={setIsMuted}
+        mediaError={mediaError}
+        setMediaError={setMediaError}
+        media={media}
+        messages={messages}
+        toggleMute={toggleMute}
+      />
 
       <ActionRail
         card={card}
@@ -513,7 +705,7 @@ export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
   const excerpt = articleExcerpt(articleText(card));
 
   return (
-    <CardFrame className="feed-card--reader" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+    <CardFrame className="feed-card--reader" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={false}>
       <div className="media-stage reader-stage">
         <div className="reader-excerpt-box">
           <h2 className="reader-card-title" dir="auto">{displayTitle}</h2>
@@ -559,7 +751,7 @@ export function MapCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBra
   const place = card.object?.geography?.places?.[0]?.label || "Morocco";
 
   return (
-    <CardFrame className="feed-card--map" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+    <CardFrame className="feed-card--map" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={true}>
       <div className="media-stage map-stage">
         <div className="map-mock-canvas">
           <div className="map-grid-lines" aria-hidden="true" />
@@ -599,7 +791,7 @@ export function MuseumCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
   }, [card.id, card.object?.media?.thumbnailUrl, card.object?.media?.url, card.downloadUrl]);
 
   return (
-    <CardFrame className="feed-card--museum" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+    <CardFrame className="feed-card--museum" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={true}>
       <div className="media-stage museum-stage">
         {currentSrc ? (
           <img
@@ -641,7 +833,7 @@ export function MuseumCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
 
 export function SessionBreathingCard({ exploredCount = 25, sourceCount = 6, onContinue, onPause, messages, showChrome, onToggleChrome }) {
   return (
-    <CardFrame className="feed-card--breathing" showChrome={showChrome} onToggleChrome={onToggleChrome}>
+    <CardFrame className="feed-card--breathing" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={false}>
       <div className="breathing-stage">
         <div className="breathing-circle" aria-hidden="true" />
         <div className="breathing-content">

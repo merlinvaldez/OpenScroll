@@ -444,16 +444,24 @@ button:disabled {
 }
 
 .feed-card .card-rail,
-.feed-card .feed-content {
-  transition: opacity var(--os-motion-standard);
+.feed-card .feed-content,
+.feed-card .video-mute-btn {
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .feed-card--chrome-hidden .card-rail,
 .feed-card--chrome-hidden .feed-content,
-.feed-card--playing .card-rail,
-.feed-card--playing .feed-content {
+.feed-card--chrome-hidden .video-mute-btn {
   opacity: 0;
   pointer-events: none;
+}
+
+.feed-card--chrome-hidden .feed-content {
+  transform: translateY(8px);
+}
+
+.feed-card--chrome-hidden .card-rail {
+  transform: translateX(8px);
 }
 
 /* MEDIA STAGES */
@@ -479,8 +487,7 @@ button:disabled {
 
 .feed-card--chrome-hidden .image-stage,
 .feed-card--chrome-hidden .video-stage,
-.feed-card--chrome-hidden .museum-stage,
-.feed-card--playing .video-stage {
+.feed-card--chrome-hidden .museum-stage {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   padding-inline: 0;
@@ -684,8 +691,7 @@ button:disabled {
   border-radius: 8px;
 }
 
-.feed-card--chrome-hidden .stage-video,
-.feed-card--playing .stage-video {
+.feed-card--chrome-hidden .stage-video {
   border-radius: 0;
 }
 
@@ -706,6 +712,39 @@ button:disabled {
 
 .video-play-btn:hover {
   transform: scale(1.06);
+}
+
+.video-mute-btn {
+  position: absolute;
+  z-index: 10;
+  top: calc(76px + env(safe-area-inset-top));
+  inset-inline-end: max(16px, env(safe-area-inset-right));
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 50%;
+  color: white;
+  background: rgb(0 0 0 / 52%);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+  transition: transform var(--os-motion-quick), background var(--os-motion-quick), opacity var(--os-motion-quick);
+}
+
+.video-mute-btn:hover {
+  background: rgb(0 0 0 / 75%);
+  transform: scale(1.08);
+}
+
+.video-mute-btn:active {
+  transform: scale(0.94);
+}
+
+.feed-card--chrome-hidden .video-mute-btn {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .media-error {
