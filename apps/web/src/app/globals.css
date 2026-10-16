@@ -777,6 +777,31 @@ button:disabled {
   box-shadow: var(--os-shadow-subtle);
 }
 
+.reader-preview-image-wrap {
+  width: 100%;
+  max-height: 240px;
+  border-radius: calc(var(--os-radius-md) - 4px);
+  overflow: hidden;
+  background: var(--os-canvas, #111412);
+  cursor: pointer;
+  border: 1px solid var(--os-line);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.reader-preview-image {
+  width: 100%;
+  height: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--os-motion-standard);
+}
+
+.reader-preview-image-wrap:hover .reader-preview-image {
+  transform: scale(1.02);
+}
+
 .reader-card-title {
   margin: 0;
   color: var(--os-ink);

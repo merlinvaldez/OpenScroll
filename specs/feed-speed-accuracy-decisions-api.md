@@ -20,7 +20,7 @@ Loading, empty, and error behavior:
 
 ## Scope and decisions
 
-Status: Steps 1, 2, 3, 4, and 5 implemented by October 15, 2026; later implementation steps remain unchecked. Created October 14, 2026.
+Status: Steps 1, 2, 3, 4, 5, 6, and 7 implemented by October 16, 2026; later implementation steps remain unchecked. Created October 14, 2026.
 
 This incorporates the preceding backend recommendations, with the user's licensing removal replacing the earlier recommendation to improve license normalization. Include relevance ranking within media buckets as part of "everything recommended." Retain mixed-media exploration and deterministic ordering for a search session. Feedback remains explicit and local; broad learned preference modeling is not required by this change.
 
@@ -173,10 +173,22 @@ Validation: `npm test` (87 passed, including worker pool concurrency, staged act
 
 Outcome: relevance affects visible order without eliminating mixed-media discovery.
 
-- [ ] Rank accepted items within media buckets using calibrated relevance probability, completeness, quality, and explicit item feedback. Retain seeded tie-breaking and media/source diversity when alternatives exist.
-- [ ] Define stable append-only delivered order: newly discovered results must not reshuffle already displayed cards. Prioritize among ready items without letting a scarce media type stall the feed.
-- [ ] Keep hide/less/more feedback effective and clearly distinguish exact-item scoring from future topic-level personalization. Do not introduce inferred broad preferences in this change.
-- [ ] Pass one topic interpretation consistently through retrieval and evaluation. For ambiguous input, show the chosen meaning with a way to refine it; only require clarification when the interpretation cannot be resolved usefully.
+- [x] Rank accepted items within media buckets using calibrated relevance probability, completeness, quality, and explicit item feedback. Retain seeded tie-breaking and media/source diversity when alternatives exist.
+- [x] Define stable append-only delivered order: newly discovered results must not reshuffle already displayed cards. Prioritize among ready items without letting a scarce media type stall the feed.
+- [x] Keep hide/less/more feedback effective and clearly distinguish exact-item scoring from future topic-level personalization. Do not introduce inferred broad preferences in this change.
+- [x] Pass one topic interpretation consistently through retrieval and evaluation. Streamline topic interpretation without unnecessary disambiguation/refinement overhead, and display lead preview images directly on article preview cards.
+
+Step 7 evidence (October 16, 2026): Intra-bucket ranking, stable append-only delivery, exact-item feedback isolation, consistent topic interpretation, and article preview images are implemented across `packages/content` and `apps/web`.
+
+Candidate scoring within media buckets (`packages/content/src/feed-composer.js`: `scoreCandidate`) computes a composite ranking score combining calibrated Decisions API relevance probability (`relevanceProbability * 1.0`), metadata completeness bonus (media url, title/description, creator, accessibility labels up to +0.35), quality bonus, and exact-item feedback adjustments (`more-like-this`: +0.4, `less-like-this`: -0.6, `hide`: -1.0). Seeded deterministic pseudo-random jitter (`options.seed`) resolves equal scores deterministically without mutating frozen item objects. Media interleaving (`interleaveMediaKinds`) partitions items into media buckets (`image`, `audio`, `video`, `text`, `data`) sorted descending by composite score so that the strongest matches appear first within each bucket. Media kinds are shuffled using the session seed and round-robin interleaved across available kinds; if a media type is scarce or exhausted, it is skipped without stalling the feed or blocking ready items from other media types, while preserving streak-breaking media/source diversity guardrails (`composeDiversityFeed`).
+
+Delivered order is strictly stable and append-only: delivered card IDs are tracked in `state.deliveredIds` in `feed-search.js` and `feed-continuation.js`, and each delivery batch is cached by sequence number in `state.deliveredBatches[seq]`. Replaying continuation tokens returns the identical batch idempotently, ensuring that subsequent continuation pages append newly retrieved items without reshuffling, reordering, or duplicating previously delivered cards.
+
+Feedback isolation is enforced strictly: user feedback actions (`hide`, `more-like-this`, `less-like-this`) are keyed solely by exact item ID (`item.id`) during local composition. No broad user preference modeling, category-level inference, or cross-topic personalization is performed, maintaining privacy and preventing cross-contamination.
+
+Topic interpretation consistency and article preview images: `packages/content/src/topic-engine.js` enforces strict Structured Outputs for entity interpretation (`label`, `description`, `aliases`), passing the resolved topic meaning consistently through search planning (`buildSearchPlans`) and candidate evaluation (`evaluateFeedCandidates`). Ambiguous refinement UI and backend disambiguation branches were fully removed to provide a clean, uncluttered user experience and eliminate latency overhead. For reader/article cards, `createWikipediaRecord` in `packages/content/src/source-connectors.js` extracts lead images from both `thumbnail` and `originalimage` metadata, populating `card.media` and `card.content.images`. In `apps/web/src/components/media-cards.js`, `ReaderCard` displays a responsive `.reader-preview-image-wrap` with subtle hover zoom and graceful error hiding, accompanied by lazy client-side enrichment fallback if initially absent.
+
+Validation: `npm test` (96 passed, including relevance probability ranking, completeness/quality factors, seeded tie-breaking, item feedback isolation, scarce media non-stalling, topic interpretation consistency, refinement bypassing re-resolution, and append-only idempotent replay), `npm run test:contracts` (passed), `npm run lint` (0 errors, 0 warnings), and `npm run build` (production build succeeded).
 
 ## 8. Stream useful cards and remove licensing UI
 

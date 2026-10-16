@@ -19,7 +19,7 @@ export const EPIC_C_RAW_ITEMS = deepFreeze([
     topics: ["History", "Culture"],
     entities: [{ id: "Q1028", label: "Morocco", source: "wikidata" }],
     collection: "Wikipedia articles",
-    media: { kind: "text", url: "https://en.wikipedia.org/wiki/Morocco", accessibility: { altText: "Text article about Morocco" } }
+    media: { kind: "text", url: "https://en.wikipedia.org/wiki/Morocco", thumbnailUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Flag_of_Morocco.svg", accessibility: { altText: "Text article about Morocco" } }
   },
   {
     id: "wikidata-gnawa",

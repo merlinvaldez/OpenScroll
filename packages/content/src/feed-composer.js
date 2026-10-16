@@ -23,13 +23,21 @@ function mediaKind(item) {
   return item.media?.kind || item.content?.type || "unknown";
 }
 
-function interleaveMediaKinds(items, random) {
+export function interleaveMediaKinds(items, random) {
   const buckets = new Map();
 
-  for (const item of items) {
+  for (const entry of items) {
+    const isScoredEntry = entry && typeof entry === "object" && "item" in entry && "score" in entry;
+    const item = isScoredEntry ? entry.item : entry;
+    const score = isScoredEntry ? entry.score : (item?.ranking?.quality ?? 0.75);
     const kind = mediaKind(item);
     if (!buckets.has(kind)) buckets.set(kind, []);
-    buckets.get(kind).push(item);
+    buckets.get(kind).push({ item, score });
+  }
+
+  // Rank accepted items within media buckets by score descending (strongest matches first)
+  for (const bucket of buckets.values()) {
+    bucket.sort((a, b) => b.score - a.score);
   }
 
   const mediaOrder = shuffle([...buckets.keys()], random);
@@ -41,7 +49,7 @@ function interleaveMediaKinds(items, random) {
     for (const kind of mediaOrder) {
       const bucket = buckets.get(kind);
       if (!bucket?.length) continue;
-      mixed.push(bucket.shift());
+      mixed.push(bucket.shift().item);
       remaining = true;
     }
   }
@@ -108,7 +116,7 @@ export function deduplicateCandidates(candidates) {
   return canonicalList;
 }
 
-export function scoreCandidate(candidate, interestGraph = {}, feedback = []) {
+export function scoreCandidate(candidate, interestGraph = {}, feedback = [], options = {}) {
   let score = candidate.ranking?.quality ?? 0.75;
   const topics = candidate.knowledge?.topics || candidate.content?.topics || [];
   const selectedTopics = interestGraph.topics || [];
@@ -127,7 +135,7 @@ export function scoreCandidate(candidate, interestGraph = {}, feedback = []) {
     }
   }
 
-  // Apply explicit feedback boost/penalty
+  // Apply explicit feedback boost/penalty strictly to exact item (no broad preference inference)
   for (const fb of feedback) {
     if (fb.itemId === candidate.id || fb.itemId === candidate.identity?.sourceItemId) {
       if (fb.action === "more-like-this") score += 0.4;
@@ -136,14 +144,55 @@ export function scoreCandidate(candidate, interestGraph = {}, feedback = []) {
     }
   }
 
-  // Medium completeness bonus
-  if (candidate.media?.url) score += 0.2;
-  if (candidate.media?.accessibility?.transcript || candidate.media?.accessibility?.captions) score += 0.1;
+  // Completeness bonus (media URL, title/description, creator, accessibility)
+  let completeness = 0;
+  if (candidate.media?.url) completeness += 0.15;
+  if (candidate.content?.title && candidate.content?.description) completeness += 0.05;
+  if (candidate.creator?.name || candidate.creators?.[0]?.name) completeness += 0.05;
+  if (candidate.media?.accessibility?.transcript || candidate.media?.accessibility?.captions) completeness += 0.1;
+  score += completeness;
 
-  // Preserve and factor Decisions relevance probability for ranking
+  // Preserve and factor Decisions calibrated relevance probability for ranking
   const relevanceProbability = candidate.ranking?.relevanceProbability ?? candidate.decision?.probability;
   if (Number.isFinite(relevanceProbability)) {
-    score += relevanceProbability * 0.5;
+    score += relevanceProbability * 1.0;
+  }
+
+  // Boost candidates matching raw query terms in title or description to differentiate similar/refined searches
+  const rawInterest = cleanString(interestGraph.interest || "", 120).toLowerCase();
+  if (rawInterest) {
+    const rawTerms = rawInterest.split(/\s+/).map((t) => t.replace(/[^a-z0-9]/g, "")).filter((t) => t.length > 2);
+    if (rawTerms.length) {
+      const candidateTitle = cleanString(candidate.content?.title || candidate.title || "", 200).toLowerCase();
+      const candidateDesc = cleanString(candidate.content?.description || candidate.description || "", 500).toLowerCase();
+      const candidateTopics = (candidate.knowledge?.topics || candidate.content?.topics || []).join(" ").toLowerCase();
+      const fullCandidateText = `${candidateTitle} ${candidateDesc} ${candidateTopics}`;
+
+      const titleMatches = rawTerms.filter((term) => candidateTitle.includes(term)).length;
+      const anyMatches = rawTerms.filter((term) => fullCandidateText.includes(term)).length;
+
+      if (titleMatches > 0) {
+        score += (titleMatches / rawTerms.length) * 0.5;
+      } else if (anyMatches > 0) {
+        score += (anyMatches / rawTerms.length) * 0.3;
+      }
+    }
+  }
+
+  // Factor in retrieval match score from source connector if available
+  if (Number.isFinite(candidate.ranking?.retrievalScore)) {
+    score += candidate.ranking.retrievalScore * 0.25;
+  }
+
+  // Seeded deterministic tie-breaking jitter
+  const seed = options.seed ?? interestGraph.seed;
+  if (seed !== undefined && seed !== null && candidate.id) {
+    const str = `${seed}:${candidate.id}`;
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    score += (hash % 1000) * 1e-6;
   }
 
   return score;
@@ -164,14 +213,17 @@ export function composeDiversityFeed(candidates, options = {}) {
   // 2. Deduplicate
   const deduplicated = deduplicateCandidates(eligible);
 
-  // 3. Score and Filter. Scores decide eligibility, not display order.
+  // 3. Score and Filter. Scores determine eligibility and intra-bucket ranking.
   const scored = deduplicated
-    .map((item) => ({ item, score: scoreCandidate(item, interestGraph, feedback) }))
+    .map((item) => {
+      const score = scoreCandidate(item, interestGraph, feedback, { seed });
+      return { item, score };
+    })
     .filter((entry) => entry.score > 0);
 
-  // 4. Shuffle for open exploration, then keep the existing diversity guardrails.
+  // 4. Interleave media buckets while preserving intra-bucket ranking and seeded tie-breaking.
   const random = seededRandom(seed);
-  const pool = interleaveMediaKinds(shuffle(scored.map((entry) => entry.item), random), random);
+  const pool = interleaveMediaKinds(scored, random);
   const composed = [];
   const remaining = [...pool];
 

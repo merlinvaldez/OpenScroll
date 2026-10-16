@@ -124,6 +124,9 @@ function createWikipediaRecord(pageData, { fullText = "", html = "" } = {}) {
   const articleText = fullText || overview;
   const sourceUrl = pageData.content_urls?.desktop?.page || pageData.fullurl || `https://en.wikipedia.org/wiki/${encodeURIComponent(pageData.title)}`;
 
+  const imageSource = pageData.originalimage || pageData.original || pageData.thumbnail;
+  const thumbSource = pageData.thumbnail || pageData.originalimage || pageData.original;
+
   return {
     id: `wikipedia:${pageData.pageid || pageData.title}`,
     sourceId: "wikipedia",
@@ -144,14 +147,19 @@ function createWikipediaRecord(pageData, { fullText = "", html = "" } = {}) {
       ...(html ? { html } : {}),
       readingTimeSeconds: Math.ceil((articleText.split(/\s+/).length || 50) / 3.5),
       isPrimarySource: false,
-      sections: fullText ? [] : [{ heading: "Overview", content: overview }]
+      sections: fullText ? [] : [{ heading: "Overview", content: overview }],
+      images: imageSource ? [{
+        url: imageSource.source || imageSource.url,
+        thumbnailUrl: thumbSource?.source || thumbSource?.url || imageSource.source || imageSource.url,
+        altText: `Image illustrating ${pageData.title}`
+      }] : []
     },
-    media: pageData.originalimage ? {
+    media: imageSource ? {
       kind: "image",
-      url: pageData.originalimage.source,
-      thumbnailUrl: pageData.thumbnail?.source || pageData.originalimage.source,
-      width: pageData.originalimage.width,
-      height: pageData.originalimage.height,
+      url: imageSource.source || imageSource.url,
+      thumbnailUrl: thumbSource?.source || thumbSource?.url || imageSource.source || imageSource.url,
+      width: imageSource.width || null,
+      height: imageSource.height || null,
       mime: "image/jpeg",
       accessibility: {
         altText: `Image illustrating ${pageData.title}`

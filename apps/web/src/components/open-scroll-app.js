@@ -170,6 +170,8 @@ export default function OpenScrollApp() {
   const activeQueryIdRef = useRef(null);
   const prefetchedBatchRef = useRef(null);
   const isPrefetchingRef = useRef(false);
+  const prefetchPromiseRef = useRef(null);
+  const activeSearchInterestRef = useRef("");
 
   const [activeCard, setActiveCard] = useState(null);
   const [activeModal, setActiveModal] = useState(null); // "branch" | "whyThis" | "whyOpen" | "viewer" | "settings"
@@ -289,15 +291,73 @@ export default function OpenScrollApp() {
   }, [toast]);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && !window.history.state) {
+      window.history.replaceState({ view: "search" }, "");
+    }
+
+    function handlePopState(event) {
+      const state = event.state;
+      if (!state || state.view === "search") {
+        if (activeAbortControllerRef.current) {
+          activeAbortControllerRef.current.abort();
+          activeAbortControllerRef.current = null;
+        }
+        prefetchedBatchRef.current = null;
+        isPrefetchingRef.current = false;
+        prefetchPromiseRef.current = null;
+        activeQueryIdRef.current = null;
+        setIsLoadingFeed(false);
+        setIsLoadingMore(false);
+        setFeedLoadingStage(null);
+        setCurrentView("search");
+      } else if (state.view === "feed") {
+        setCurrentView("feed");
+      } else if (state.view) {
+        setCurrentView(state.view);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  function handleNavigateBack() {
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+      activeAbortControllerRef.current = null;
+    }
+    prefetchedBatchRef.current = null;
+    isPrefetchingRef.current = false;
+    prefetchPromiseRef.current = null;
+    activeQueryIdRef.current = null;
+    setIsLoadingFeed(false);
+    setIsLoadingMore(false);
+    setFeedLoadingStage(null);
+
+    if (typeof window !== "undefined" && window.history.state?.view === "feed") {
+      window.history.back();
+    } else {
+      setCurrentView("search");
+    }
+  }
+
+  useEffect(() => {
     if (currentView === "search" && interestInput.current) {
       interestInput.current.focus();
     }
   }, [currentView]);
 
+  useEffect(() => {
+    if (currentView === "feed" && feedRef.current) {
+      feedRef.current.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [currentView, activeQueryIdRef.current]);
+
   async function handleSearchSubmit(event) {
     if (event) event.preventDefault();
-    const query = interest.trim();
+    const query = (interestInput.current?.value || interest).trim();
     if (!query) return;
+    setInterest(query);
     await handleBuildScroll(query);
   }
 
@@ -315,6 +375,13 @@ export default function OpenScrollApp() {
       return;
     }
 
+    setInterest(cleanInterest);
+    activeSearchInterestRef.current = cleanInterest;
+
+    if (typeof window !== "undefined" && window.history) {
+      window.history.pushState({ view: "feed", interest: cleanInterest }, "", window.location.pathname);
+    }
+
     const nextSeed = createFeedSeed();
     setIsLoadingFeed(true);
     setFeedLoadingStage({
@@ -324,6 +391,9 @@ export default function OpenScrollApp() {
     });
     setCurrentView("feed");
     setCards([]);
+    if (feedRef.current) {
+      feedRef.current.scrollTo({ top: 0, behavior: "instant" });
+    }
     setFeedMediaTypes(selectedMediaTypes);
     setFeedSeed(nextSeed);
     setFeedCursor(null);
@@ -341,6 +411,7 @@ export default function OpenScrollApp() {
     activeQueryIdRef.current = queryId;
     prefetchedBatchRef.current = null;
     isPrefetchingRef.current = false;
+    prefetchPromiseRef.current = null;
 
     try {
       const res = await fetch("/api/feed/compose", {
@@ -399,46 +470,57 @@ export default function OpenScrollApp() {
 
     isPrefetchingRef.current = true;
     const currentQueryId = activeQueryIdRef.current;
-    const cleanInterest = interest.trim();
+    const cleanInterest = activeSearchInterestRef.current || interest.trim();
 
-    try {
-      const res = await fetch("/api/feed/compose", {
-        method: "POST",
-        headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
-        signal: activeAbortControllerRef.current?.signal,
-        body: JSON.stringify({
-          continuation: feedCursor,
-          cursor: feedCursor,
-          interest: cleanInterest,
-          feedback: localState.feedback,
-          pageSize: 15,
-          seed: feedSeed,
-          sourceOffsets: feedSourceOffsets,
-          mediaTypes: feedMediaTypes,
-          searchPlan: feedSearchPlan
-        })
-      });
+    const promise = (async () => {
+      try {
+        const res = await fetch("/api/feed/compose", {
+          method: "POST",
+          headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
+          signal: activeAbortControllerRef.current?.signal,
+          body: JSON.stringify({
+            continuation: feedCursor,
+            cursor: feedCursor,
+            interest: cleanInterest,
+            feedback: localState.feedback,
+            pageSize: 15,
+            seed: feedSeed,
+            sourceOffsets: feedSourceOffsets,
+            mediaTypes: feedMediaTypes,
+            searchPlan: feedSearchPlan
+          })
+        });
 
-      const payload = await readFeedResponse(res, () => {});
-      if (activeQueryIdRef.current === currentQueryId && payload?.data?.items?.length) {
-        prefetchedBatchRef.current = {
-          items: payload.data.items,
-          pagination: payload.data.pagination,
-          sourceOffsets: payload.data.sourceOffsets,
-          sourceHasMore: payload.data.sourceHasMore,
-          queryId: currentQueryId
-        };
+        const payload = await readFeedResponse(res, () => {});
+        if (activeQueryIdRef.current === currentQueryId && payload?.data?.items?.length) {
+          prefetchedBatchRef.current = {
+            items: payload.data.items,
+            pagination: payload.data.pagination,
+            sourceOffsets: payload.data.sourceOffsets,
+            sourceHasMore: payload.data.sourceHasMore,
+            queryId: currentQueryId
+          };
+        }
+      } catch {
+        // Prefetches fail gracefully without blocking user interaction
+      } finally {
+        isPrefetchingRef.current = false;
+        prefetchPromiseRef.current = null;
       }
-    } catch {
-      // Prefetches fail gracefully without blocking user interaction
-    } finally {
-      isPrefetchingRef.current = false;
-    }
+    })();
+
+    prefetchPromiseRef.current = promise;
+    await promise;
   }
 
   // Endless Infinite Scroll Loader
   async function handleLoadMoreCards() {
     if (isLoadingFeed || isLoadingMore || currentView !== "feed" || (feedCursor === null && feedExhausted)) return;
+
+    // Await any in-flight prefetch so we don't duplicate concurrent requests on the same continuation cursor
+    if (isPrefetchingRef.current && prefetchPromiseRef.current) {
+      await prefetchPromiseRef.current;
+    }
 
     // Fast-path: consume prefetched batch if already available for this query
     if (prefetchedBatchRef.current && prefetchedBatchRef.current.queryId === activeQueryIdRef.current) {
@@ -466,15 +548,15 @@ export default function OpenScrollApp() {
     setIsLoadingMore(true);
     setFeedLoadingStage({
       phase: "retrieving",
-      label: "Searching Wikimedia Commons",
-      detail: "Looking for the next focused batch"
+      label: "Searching for more related open knowledge",
+      detail: "Expanding Wikimedia Commons and open archives"
     });
 
     const currentQueryId = activeQueryIdRef.current;
     try {
       const requestingNextSourceBatch = feedCursor === null;
       const nextCursor = requestingNextSourceBatch ? 0 : feedCursor;
-      const cleanInterest = interest.trim();
+      const cleanInterest = activeSearchInterestRef.current || interest.trim();
 
       const res = await fetch("/api/feed/compose", {
         method: "POST",
@@ -524,6 +606,7 @@ export default function OpenScrollApp() {
       setFeedLoadingStage(null);
     }
   }
+
 
   // Near-end prefetch trigger when scrolling through displayed cards
   useEffect(() => {
@@ -642,7 +725,7 @@ export default function OpenScrollApp() {
     <AppShell
       feedMode={currentView === "feed"}
       onExplore={() => setCurrentView("explore")}
-      onBrandClick={() => setCurrentView("search")}
+      onBrandClick={handleNavigateBack}
     >
       <main className={`journey ${isRtl ? "journey--rtl" : ""}`}>
         {/* VIEW 1: SEARCH / INTEREST ENTRY */}
@@ -701,7 +784,7 @@ export default function OpenScrollApp() {
             onScroll={handleFeedScroll}
           >
             <header className="feed-header">
-              <IconButton label={messages.back} onClick={() => setCurrentView("search")}>
+              <IconButton label={messages.back} onClick={handleNavigateBack}>
                 <ArrowLeft className="directional-icon" aria-hidden="true" />
               </IconButton>
               <strong dir="auto">{interest}</strong>
@@ -761,7 +844,7 @@ export default function OpenScrollApp() {
               ) : feedExhausted ? (
                 <div className="infinite-stream-loader infinite-stream-loader--subtle">
                   <span className="stream-dot" aria-hidden="true" />
-                  <span>End of feed</span>
+                  <span>Reached the end of this exploration • Scroll back or search another topic</span>
                 </div>
               ) : (
                 <div className="infinite-stream-loader infinite-stream-loader--subtle">

@@ -108,3 +108,53 @@ export function buildSearchPlans(query, entity, mediaTypes) {
       : buildCommonsSearchPlan(query, entity)
   ]));
 }
+
+export const FACET_EXPANSIONS = Object.freeze([
+  ["history", "culture"],
+  ["art", "architecture"],
+  ["music", "traditions"],
+  ["geography", "nature"],
+  ["heritage", "people"],
+  ["festivals", "society"]
+]);
+
+export function expandSearchPlans(currentPlans, query, entity, mediaTypes, stage = 3) {
+  const rawQuery = normalizeQuery(query);
+  const canonicalLabel = normalizeQuery(entity?.label) || rawQuery;
+  const aliases = unique([
+    ...(Array.isArray(entity?.aliases) ? entity.aliases : [])
+  ].map((alias) => normalizeQuery(alias)).filter(Boolean));
+
+  const facetIndex = Math.max(0, stage - 3) % FACET_EXPANSIONS.length;
+  const facetTerms = FACET_EXPANSIONS[facetIndex] || ["culture", "history"];
+
+  const updatedPlans = {};
+
+  for (const mediaType of (Array.isArray(mediaTypes) ? mediaTypes : [])) {
+    const existing = currentPlans?.[mediaType];
+    const existingVariants = existing?.variants ? [...existing.variants] : [];
+    const seenQueries = new Set(existingVariants.map((v) => normalizedKey(v.query)));
+
+    for (const alias of aliases) {
+      if (existingVariants.length >= 25) break;
+      if (!seenQueries.has(normalizedKey(alias))) {
+        addVariant(existingVariants, seenQueries, alias, "entity-alias", stage);
+      }
+    }
+
+    for (const facet of facetTerms) {
+      if (existingVariants.length >= 25) break;
+      const facetQuery = `${canonicalLabel} ${facet}`.trim();
+      addVariant(existingVariants, seenQueries, facetQuery, `facet-${facet}`, stage);
+    }
+
+    updatedPlans[mediaType] = {
+      rawQuery,
+      entity: existing?.entity || (canonicalLabel ? { label: canonicalLabel, aliases } : null),
+      variants: existingVariants
+    };
+  }
+
+  return updatedPlans;
+}
+

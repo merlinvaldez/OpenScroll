@@ -1,7 +1,7 @@
 import { composeDiversityFeed, canonicalClusterKey } from "./feed-composer.js";
 import { resolveEntity, evaluateFeedCandidates } from "./topic-engine.js";
 import { queryLiveConnectors, asyncPool } from "./source-connectors.js";
-import { buildSearchPlans } from "./search-planner.js";
+import { buildSearchPlans, expandSearchPlans } from "./search-planner.js";
 import { createFeedMetrics, reportFeedMetrics } from "./feed-metrics.js";
 import {
   CONTINUATION_TOKEN_PREFIX,
@@ -121,7 +121,7 @@ async function fetchPassingSearchResults({
     ? options.maxConcurrency
     : DEFAULT_CONCURRENCY;
 
-  const allPairs = mediaTypes.flatMap((mediaType) =>
+  let allPairs = mediaTypes.flatMap((mediaType) =>
     (plans[mediaType]?.variants || []).map((variant) => ({ mediaType, variant }))
   );
 
@@ -144,9 +144,30 @@ async function fetchPassingSearchResults({
       return (variant.stage || 1) <= state.activeStage;
     });
 
-    // Advance to stage 2 if stage 1 has no more active pairs
-    if (!activePairs.length && state.activeStage < 2) {
-      state.activeStage = 2;
+    // Advance to higher stages or dynamically expand search plans when active pairs are exhausted
+    while (!activePairs.length && state.activeStage < 8) {
+      state.activeStage += 1;
+
+      // Expand search plans dynamically with facet variants if this stage doesn't have variants yet
+      const hasStageVariants = allPairs.some(({ variant }) => (variant.stage || 1) === state.activeStage);
+      if (!hasStageVariants && state.activeStage >= 3) {
+        const expanded = expandSearchPlans(plans, state.query, state.topicMeaning, mediaTypes, state.activeStage);
+        for (const [mType, plan] of Object.entries(expanded)) {
+          plans[mType] = plan;
+          if (state.searchPlan?.variants) {
+            state.searchPlan.variants[mType] = plan.variants.map((v) => ({
+              key: v.key,
+              query: v.query,
+              strategy: v.strategy,
+              stage: v.stage
+            }));
+          }
+        }
+        allPairs = mediaTypes.flatMap((mediaType) =>
+          (plans[mediaType]?.variants || []).map((variant) => ({ mediaType, variant }))
+        );
+      }
+
       activePairs = allPairs.filter(({ mediaType, variant }) => {
         const pairKey = `${mediaType}:${variant.key}`;
         if (exhaustedPairsSet.has(pairKey)) return false;
@@ -155,6 +176,7 @@ async function fetchPassingSearchResults({
     }
 
     if (!activePairs.length) break;
+
     metrics.increment("rounds");
 
     // Prioritize underrepresented selected media types without waiting indefinitely for scarce types
@@ -578,7 +600,7 @@ async function composeMeasuredSearchFeed(body = {}, options = {}) {
     ? body.maxConcurrency
     : (Number.isInteger(extraOptions.maxConcurrency) && extraOptions.maxConcurrency > 0 ? extraOptions.maxConcurrency : undefined);
 
-  if (neededCount > 0 && (!state.exhaustedPairs || state.exhaustedPairs.length < totalPairs)) {
+  if (neededCount > 0 && !state.exhausted) {
     const searchResult = await fetchPassingSearchResults({
       term: state.query,
       mediaTypes: selectedMediaTypes,
@@ -601,8 +623,9 @@ async function composeMeasuredSearchFeed(body = {}, options = {}) {
     batchCandidates.push(...searchResult.acceptedThisFetch);
   }
 
-  // Persist exhaustion when all source searches are exhausted and pending pool is empty
-  const allPairsExhausted = (state.exhaustedPairs?.length || 0) >= totalPairs;
+  // Persist exhaustion only when all source variants across all stages are exhausted and pending pool is empty
+  const currentTotalPairs = selectedMediaTypes.flatMap((type) => plans[type]?.variants || []).length;
+  const allPairsExhausted = (state.exhaustedPairs?.length || 0) >= currentTotalPairs && (state.activeStage >= 8);
   if (allPairsExhausted && state.pendingAccepted.length === 0) {
     state.exhausted = true;
   }
@@ -666,7 +689,8 @@ async function composeMeasuredSearchFeed(body = {}, options = {}) {
     sourceHasMore: !state.exhausted,
     exhausted: Boolean(state.exhausted),
     pendingAcceptedCount: state.pendingAccepted.length,
-    searchPlan: state.searchPlan
+    searchPlan: state.searchPlan,
+    topicMeaning: state.topicMeaning
   };
 
   // Cache batch for idempotent replay

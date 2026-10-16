@@ -704,10 +704,75 @@ export function ReaderCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, on
   const isPrimarySource = card.object?.content?.type === "source-text";
   const excerpt = articleExcerpt(articleText(card));
 
+  const candidateImg = card.object?.media?.thumbnailUrl ||
+    card.object?.media?.url ||
+    card.object?.content?.images?.[0]?.thumbnailUrl ||
+    card.object?.content?.images?.[0]?.url ||
+    card.mediaUrl ||
+    "";
+
+  const [imageUrl, setImageUrl] = useState(candidateImg);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    const freshImg = card.object?.media?.thumbnailUrl ||
+      card.object?.media?.url ||
+      card.object?.content?.images?.[0]?.thumbnailUrl ||
+      card.object?.content?.images?.[0]?.url ||
+      card.mediaUrl ||
+      "";
+    setImageUrl(freshImg);
+    setImageFailed(false);
+
+    // If no image is on the card yet, but it is a Wikipedia article, fetch article metadata to bring its image into preview
+    if (!freshImg && (card.object?.sourceId === "wikipedia" || card.object?.source?.id === "wikipedia" || card.source?.toLowerCase().includes("wikipedia"))) {
+      const articleTitle = card.object?.content?.originalTitle || card.object?.content?.title || card.title;
+      if (!articleTitle) return;
+      const controller = new AbortController();
+      fetch(`/api/article?source=wikipedia&title=${encodeURIComponent(articleTitle)}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload) => {
+          const item = payload?.data?.item;
+          const found = item?.media?.thumbnailUrl || item?.media?.url || item?.content?.images?.[0]?.thumbnailUrl || item?.content?.images?.[0]?.url;
+          if (found) {
+            setImageUrl(found);
+          }
+        })
+        .catch(() => {});
+      return () => controller.abort();
+    }
+  }, [card.id, card.object?.media?.thumbnailUrl, card.object?.media?.url, card.mediaUrl]);
+
   return (
     <CardFrame className="feed-card--reader" showChrome={showChrome} onToggleChrome={onToggleChrome} autoFade={false}>
       <div className="media-stage reader-stage">
         <div className="reader-excerpt-box">
+          {imageUrl && !imageFailed ? (
+            <div
+              className="reader-preview-image-wrap"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenViewer(card, "reader");
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={messages.readArticle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onOpenViewer(card, "reader");
+                }
+              }}
+            >
+              <img
+                src={imageUrl}
+                alt={card.object?.media?.accessibility?.altText || displayTitle}
+                className="reader-preview-image"
+                loading="lazy"
+                onError={() => setImageFailed(true)}
+              />
+            </div>
+          ) : null}
           <h2 className="reader-card-title" dir="auto">{displayTitle}</h2>
           {isPrimarySource ? (
             <span className="primary-source-tag">{messages.primarySource}</span>

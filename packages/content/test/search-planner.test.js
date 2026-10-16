@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCommonsSearchPlan, buildSearchPlans } from "../src/search-planner.js";
+import { buildCommonsSearchPlan, buildSearchPlans, expandSearchPlans } from "../src/search-planner.js";
 
 test("Commons search planner creates bounded canonical and title variants", () => {
   const plan = buildCommonsSearchPlan("Gnawa music Morocco", {
@@ -23,3 +23,16 @@ test("Commons search planner removes duplicate variants and preserves media plan
   assert.equal(plans.images.variants.length, plans.audio.variants.length);
   assert.equal(new Set(plans.images.variants.map((variant) => variant.query)).size, plans.images.variants.length);
 });
+
+test("expandSearchPlans adds stage 3+ facet variants dynamically without mutating initial stages", () => {
+  const initial = buildSearchPlans("Morocco", { label: "Morocco", aliases: ["Kingdom of Morocco", "Maghreb", "Al-Maghrib"] }, ["images", "text"]);
+  const expanded = expandSearchPlans(initial, "Morocco", { label: "Morocco", aliases: ["Kingdom of Morocco", "Maghreb", "Al-Maghrib"] }, ["images", "text"], 3);
+
+  assert.ok(expanded.images.variants.length > initial.images.variants.length);
+  assert.ok(expanded.images.variants.some((v) => v.stage === 3));
+  assert.ok(expanded.text.variants.some((v) => v.stage === 3));
+  // Preserves stage 1 and 2
+  assert.ok(expanded.images.variants.some((v) => v.stage === 1));
+  assert.ok(expanded.images.variants.some((v) => v.stage === 2));
+});
+

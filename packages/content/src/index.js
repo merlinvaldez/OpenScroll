@@ -39,8 +39,8 @@ export {
   getDecisionsConfig,
   requestOpenAIStructuredOutput
 } from "./topic-engine.js";
-export { composeDiversityFeed, deduplicateCandidates, scoreCandidate } from "./feed-composer.js";
-export { buildCommonsSearchPlan, buildSearchPlans } from "./search-planner.js";
+export { composeDiversityFeed, deduplicateCandidates, scoreCandidate, interleaveMediaKinds } from "./feed-composer.js";
+export { buildCommonsSearchPlan, buildSearchPlans, expandSearchPlans, FACET_EXPANSIONS } from "./search-planner.js";
 export { composeSearchFeed, FEED_MEDIA_TYPE_KINDS, FEED_MEDIA_TYPE_SOURCES } from "./feed-search.js";
 export {
   FEED_CONTINUATION_VERSION,

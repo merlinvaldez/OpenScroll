@@ -118,3 +118,241 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
     else process.env.OPENAI_MODEL = previousModel;
   }
 });
+
+test("passes topic interpretation consistently through retrieval and Decisions evaluation", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  const requests = [];
+  process.env.OPENAI_API_KEY = "test-key";
+
+  globalThis.fetch = async (url, init = {}) => {
+    requests.push({ url, init });
+    if (url === "https://api.openai.com/v1/responses") {
+      return mockResponse({
+        id: "resp_entity",
+        status: "completed",
+        model: "gpt-6-luna",
+        output: [{
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [{
+            type: "output_text",
+            text: JSON.stringify({
+              label: "Gnawa",
+              description: "A Moroccan musical tradition.",
+              aliases: ["Gnaoua", "Tagnaouite"],
+              disambiguation: []
+            })
+          }]
+        }]
+      });
+    }
+
+    if (url === "https://api.openai.com/v1/decisions") {
+      const body = JSON.parse(init.body);
+      const answers = (body.questions || []).map((q) => ({
+        type: "predicate",
+        name: q.name,
+        probability: 0.95
+      }));
+      return mockResponse({ model: "gpt-6-luna", answers });
+    }
+
+    const pages = {
+      1: {
+        pageid: 1,
+        title: "File:Gnawa music ritual.jpg",
+        imageinfo: [{
+          url: "https://upload.wikimedia.org/gnawa-1.jpg",
+          mime: "image/jpeg",
+          extmetadata: { ImageDescription: { value: "Gnawa musicians in Essaouira" } }
+        }]
+      }
+    };
+    return mockResponse({ query: { pages } });
+  };
+
+  try {
+    const result = await composeSearchFeed({
+      interest: "Gnawa",
+      mediaTypes: ["images"],
+      pageSize: 1
+    }, { skipCache: true });
+
+    // Verify topic meaning is present on result
+    assert.ok(result.topicMeaning, "Result must contain topicMeaning");
+    assert.equal(result.topicMeaning.label, "Gnawa");
+    assert.deepEqual(result.topicMeaning.aliases, ["Gnawa", "Gnaoua", "Tagnaouite"]);
+
+    // Verify Decisions API received the exact topic meaning
+    const decisionsReq = requests.find((r) => r.url === "https://api.openai.com/v1/decisions");
+    assert.ok(decisionsReq, "Decisions request must be made");
+    const decisionsBody = JSON.parse(decisionsReq.init.body);
+    assert.match(decisionsBody.input, /Resolved topic meaning: Gnawa — A Moroccan musical tradition\./);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("article search items include preview image metadata when Wikipedia returns thumbnail without originalimage", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+
+  globalThis.fetch = async (url, init = {}) => {
+    if (url === "https://api.openai.com/v1/responses") {
+      return mockResponse({
+        id: "resp_entity",
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            role: "assistant",
+            status: "completed",
+            content: [
+              {
+                type: "output_text",
+                text: JSON.stringify({
+                  label: "Atlas Mountains",
+                  description: "Mountain range in the Maghreb",
+                  aliases: ["Idraren Draren"]
+                })
+              }
+            ]
+          }
+        ]
+      });
+    }
+
+    if (url === "https://api.openai.com/v1/decisions") {
+      const body = JSON.parse(init.body);
+      const answers = (body.questions || []).map((q) => ({
+        type: "predicate",
+        name: q.name,
+        probability: 0.95
+      }));
+      return mockResponse({
+        model: "gpt-6-luna",
+        answers
+      });
+    }
+
+    if (url.includes("api.php") && url.includes("list=search")) {
+      return mockResponse({
+        query: {
+          search: [
+            { title: "Atlas Mountains", pageid: 456 }
+          ]
+        }
+      });
+    }
+
+    if (url.includes("/page/summary/")) {
+      return mockResponse({
+        type: "standard",
+        title: "Atlas Mountains",
+        pageid: 456,
+        extract: "The Atlas Mountains are a mountain range in the Maghreb.",
+        thumbnail: {
+          source: "https://upload.wikimedia.org/atlas_thumb.jpg",
+          width: 320,
+          height: 240
+        }
+      });
+    }
+
+    return mockResponse({ query: { pages: {} } });
+  };
+
+  try {
+    const result = await composeSearchFeed({
+      interest: "Atlas Mountains",
+      mediaTypes: ["text"],
+      pageSize: 1
+    }, { skipCache: true });
+
+    assert.equal(result.items.length, 1);
+    const article = result.items[0];
+    assert.equal(article.content.type, "reader");
+    assert.ok(article.media, "Article card must retain media when thumbnail is present");
+    assert.equal(article.media.thumbnailUrl, "https://upload.wikimedia.org/atlas_thumb.jpg");
+    assert.equal(article.content.images.length, 1);
+    assert.equal(article.content.images[0].url, "https://upload.wikimedia.org/atlas_thumb.jpg");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
+test("stable append-only delivered order: subsequent continuation batches never reshuffle delivered cards", async () => {
+  const originalFetch = globalThis.fetch;
+  const previousKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "test-key";
+
+  globalThis.fetch = async (url, init = {}) => {
+    if (url === "https://api.openai.com/v1/responses") {
+      return mockResponse({
+        id: "resp_entity",
+        status: "completed",
+        model: "gpt-6-luna",
+        output: [{
+          type: "message",
+          role: "assistant",
+          status: "completed",
+          content: [{
+            type: "output_text",
+            text: JSON.stringify({ label: "Gnawa", description: "Music", aliases: [] })
+          }]
+        }]
+      });
+    }
+
+    if (url === "https://api.openai.com/v1/decisions") {
+      const body = JSON.parse(init.body);
+      return mockResponse({
+        model: "gpt-6-luna",
+        answers: (body.questions || []).map((q) => ({ type: "predicate", name: q.name, probability: 0.9 }))
+      });
+    }
+
+    // Return multiple distinct items
+    return mockResponse({
+      query: {
+        pages: {
+          1: { pageid: 1, title: "File:Gnawa 1.jpg", imageinfo: [{ url: "https://upload.wikimedia.org/1.jpg", mime: "image/jpeg" }] },
+          2: { pageid: 2, title: "File:Gnawa 2.jpg", imageinfo: [{ url: "https://upload.wikimedia.org/2.jpg", mime: "image/jpeg" }] },
+          3: { pageid: 3, title: "File:Gnawa 3.jpg", imageinfo: [{ url: "https://upload.wikimedia.org/3.jpg", mime: "image/jpeg" }] }
+        }
+      }
+    });
+  };
+
+  try {
+    // Page 1 (pageSize: 1)
+    const page1 = await composeSearchFeed({ interest: "Gnawa", mediaTypes: ["images"], pageSize: 1, seed: 42 });
+    assert.equal(page1.items.length, 1);
+    const item1Id = page1.items[0].id;
+    assert.ok(page1.continuation, "Page 1 must return a continuation token");
+
+    // Page 2 (pageSize: 1 using continuation)
+    const page2 = await composeSearchFeed({ continuation: page1.continuation, pageSize: 1 });
+    assert.equal(page2.items.length, 1);
+    const item2Id = page2.items[0].id;
+
+    // Must be distinct items and not reshuffle
+    assert.notEqual(item2Id, item1Id, "Subsequent continuation page must not re-deliver already delivered items");
+
+    // Idempotent retry: replaying page1.continuation must return identical item2Id
+    const replayPage2 = await composeSearchFeed({ continuation: page1.continuation, pageSize: 1 });
+    assert.equal(replayPage2.items[0].id, item2Id, "Replaying continuation batch must return the exact same delivered item");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+  }
+});
+
