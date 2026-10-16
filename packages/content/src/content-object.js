@@ -121,8 +121,8 @@ export function createUniversalContentObject(record, options = {}) {
     },
     media: {
       kind: cleanString(record.media?.kind || record.type, 40),
-      url: cleanString(record.media?.url || record.sourceUrl, 300),
-      thumbnailUrl: cleanString(record.media?.thumbnailUrl, 300),
+      url: cleanString(record.media?.url || record.sourceUrl, 500),
+      thumbnailUrl: cleanString(record.media?.thumbnailUrl, 500),
       mimeType: cleanString(record.media?.mimeType || record.media?.mime, 80),
       status: cleanString(record.media?.status || (record.media?.url ? "available" : "metadata-only"), 40),
       width: Number.isInteger(record.media?.width) ? record.media.width : null,
@@ -132,7 +132,15 @@ export function createUniversalContentObject(record, options = {}) {
         altText: cleanString(record.media?.accessibility?.altText, 300),
         captions: cleanString(record.media?.accessibility?.captions, 300),
         transcript: cleanString(record.media?.accessibility?.transcript, 500)
-      }
+      },
+      ...(Array.isArray(record.media?.sources) ? {
+        sources: record.media.sources.map((s) => ({
+          src: cleanString(s.src, 500),
+          type: cleanString(s.type, 80),
+          width: Number.isInteger(s.width) ? s.width : null,
+          height: Number.isInteger(s.height) ? s.height : null
+        })).filter((s) => s.src)
+      } : {})
     },
     source: {
       id: source.id,

@@ -200,6 +200,70 @@ test("Commons media searches add a type-specific file filter", async () => {
   }
 });
 
+test("Commons video searches extract transcoded derivatives and prioritize playable WebM/MP4 sources over Theora .ogv", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      query: {
+        pages: {
+          "101": {
+            pageid: 101,
+            title: "File:Historic_Video_Tokyo.ogv",
+            imageinfo: [{
+              url: "https://upload.wikimedia.org/Historic_Video_Tokyo.ogv",
+              thumburl: "https://thumb.wikimedia.org/Historic_Video_Tokyo.ogv.jpg",
+              width: 640,
+              height: 480,
+              mime: "application/ogg",
+              mediatype: "VIDEO"
+            }],
+            videoinfo: [{
+              derivatives: [
+                {
+                  src: "https://upload.wikimedia.org/Historic_Video_Tokyo.ogv",
+                  type: "video/ogg; codecs=\"theora, vorbis\"",
+                  width: 640,
+                  height: 480
+                },
+                {
+                  src: "https://upload.wikimedia.org/transcoded/Historic_Video_Tokyo.ogv.480p.vp9.webm",
+                  type: "video/webm; codecs=\"vp9, opus\"",
+                  transcodekey: "480p.vp9.webm",
+                  width: 640,
+                  height: 480
+                },
+                {
+                  src: "https://upload.wikimedia.org/transcoded/Historic_Video_Tokyo.ogv.360p.mpeg4.mov",
+                  type: "video/quicktime; codecs=\"mp4v\"",
+                  transcodekey: "360p.mpeg4.mov",
+                  width: 480,
+                  height: 360
+                }
+              ]
+            }]
+          }
+        }
+      }
+    })
+  });
+
+  try {
+    const items = await searchCommonsLive("Tokyo", 2, { mediaType: "video" });
+    assert.equal(items.length, 1);
+    const videoItem = items[0];
+    assert.equal(videoItem.media.kind, "video");
+    assert.equal(videoItem.media.url, "https://upload.wikimedia.org/transcoded/Historic_Video_Tokyo.ogv.480p.vp9.webm");
+    assert.equal(videoItem.media.mimeType, "video/webm");
+    assert.ok(Array.isArray(videoItem.media.sources));
+    assert.equal(videoItem.media.sources.length, 2);
+    assert.ok(videoItem.media.sources.some((s) => s.type.includes("webm")));
+    assert.ok(videoItem.media.sources.some((s) => s.type.includes("quicktime")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Commons normalization ignores absent and incompatible licenses and requests no license metadata", async () => {
   const originalFetch = globalThis.fetch;
   let requested;

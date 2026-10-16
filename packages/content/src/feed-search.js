@@ -1,6 +1,6 @@
-import { composeDiversityFeed } from "./feed-composer.js";
+import { composeDiversityFeed, canonicalClusterKey } from "./feed-composer.js";
 import { resolveEntity, evaluateFeedCandidates } from "./topic-engine.js";
-import { queryLiveConnectors } from "./source-connectors.js";
+import { queryLiveConnectors, asyncPool } from "./source-connectors.js";
 import { buildSearchPlans } from "./search-planner.js";
 import { createFeedMetrics, reportFeedMetrics } from "./feed-metrics.js";
 import {
@@ -17,8 +17,11 @@ import {
 export const FEED_MEDIA_TYPE_KINDS = Object.freeze({ images: "image", audio: "audio", video: "video", text: "text", data: "data" });
 export const FEED_MEDIA_TYPE_SOURCES = Object.freeze({ images: ["wikimedia-commons"], audio: ["wikimedia-commons"], video: ["wikimedia-commons"], text: ["wikipedia"], data: ["wikimedia-commons"] });
 
-const EVALUATION_BATCH_SIZE = 5;
-const MAX_REQUERY_ROUNDS = 20;
+export const DEFAULT_RETRIEVAL_BATCH_SIZE = 10;
+export const DEFAULT_MAX_ROUNDS = 4;
+export const DEFAULT_MAX_CANDIDATES = 40;
+export const DEFAULT_CONCURRENCY = 4;
+export const DEFAULT_TIME_BUDGET_MS = 3500;
 const TEXT_CONTENT_TYPES = new Set(["article", "reader", "source-text", "dictionary", "travel-guide", "text"]);
 
 function candidateMatchesMediaType(candidate, mediaType) {
@@ -99,19 +102,75 @@ async function fetchPassingSearchResults({
   onProgress,
   metrics,
   signal,
-  deadline
+  deadline,
+  options = {}
 }) {
-  const pairs = mediaTypes.flatMap((mediaType) => plans[mediaType].variants.map((variant) => ({ mediaType, variant })));
+  const retrievalLimit = Number.isInteger(options.retrievalBatchSize) && options.retrievalBatchSize > 0
+    ? options.retrievalBatchSize
+    : Number(process.env.FEED_RETRIEVAL_BATCH_SIZE) || DEFAULT_RETRIEVAL_BATCH_SIZE;
+
+  const maxRounds = Number.isInteger(options.maxRounds) && options.maxRounds > 0
+    ? options.maxRounds
+    : Number(process.env.FEED_SEARCH_MAX_ROUNDS) || DEFAULT_MAX_ROUNDS;
+
+  const maxCandidates = Number.isInteger(options.maxCandidates) && options.maxCandidates > 0
+    ? options.maxCandidates
+    : Number(process.env.FEED_SEARCH_MAX_CANDIDATES) || DEFAULT_MAX_CANDIDATES;
+
+  const maxConcurrency = Number.isInteger(options.maxConcurrency) && options.maxConcurrency > 0
+    ? options.maxConcurrency
+    : DEFAULT_CONCURRENCY;
+
+  const allPairs = mediaTypes.flatMap((mediaType) =>
+    (plans[mediaType]?.variants || []).map((variant) => ({ mediaType, variant }))
+  );
+
+  state.activeStage = state.activeStage || 1;
+  state.mediaTypeAttempts = state.mediaTypeAttempts || {};
   const exhaustedPairsSet = new Set(state.exhaustedPairs || []);
   const seenIdsSet = new Set(state.seenIds || []);
   const deliveredIdsSet = new Set(state.deliveredIds || []);
   const acceptedThisFetch = [];
   let evaluatedCount = 0;
 
-  for (let round = 0; round < MAX_REQUERY_ROUNDS && acceptedThisFetch.length < neededCount; round += 1) {
-    const activePairs = pairs.filter(({ mediaType, variant }) => !exhaustedPairsSet.has(`${mediaType}:${variant.key}`));
+  for (let round = 0; round < maxRounds && acceptedThisFetch.length < neededCount; round += 1) {
+    if (evaluatedCount >= maxCandidates) break;
+    if (deadline && Date.now() >= deadline) break;
+
+    // Filter active pairs for current stage
+    let activePairs = allPairs.filter(({ mediaType, variant }) => {
+      const pairKey = `${mediaType}:${variant.key}`;
+      if (exhaustedPairsSet.has(pairKey)) return false;
+      return (variant.stage || 1) <= state.activeStage;
+    });
+
+    // Advance to stage 2 if stage 1 has no more active pairs
+    if (!activePairs.length && state.activeStage < 2) {
+      state.activeStage = 2;
+      activePairs = allPairs.filter(({ mediaType, variant }) => {
+        const pairKey = `${mediaType}:${variant.key}`;
+        if (exhaustedPairsSet.has(pairKey)) return false;
+        return (variant.stage || 1) <= state.activeStage;
+      });
+    }
+
     if (!activePairs.length) break;
     metrics.increment("rounds");
+
+    // Prioritize underrepresented selected media types without waiting indefinitely for scarce types
+    const typeRepresentations = new Map();
+    for (const mt of mediaTypes) {
+      const pendingCount = (state.pendingAccepted || []).filter((item) => candidateMatchesMediaType(item, mt)).length;
+      const currentCount = acceptedThisFetch.filter((item) => candidateMatchesMediaType(item, mt)).length;
+      typeRepresentations.set(mt, pendingCount + currentCount);
+    }
+
+    activePairs.sort((a, b) => {
+      const countA = typeRepresentations.get(a.mediaType) ?? 0;
+      const countB = typeRepresentations.get(b.mediaType) ?? 0;
+      if (countA !== countB) return countA - countB;
+      return (a.variant.stage || 1) - (b.variant.stage || 1);
+    });
 
     progress(onProgress, {
       phase: "retrieving",
@@ -119,37 +178,42 @@ async function fetchPassingSearchResults({
       detail: `Retrieval batch ${round + 1}: ${activePairs.length} focused searches`
     });
 
-    const responses = await metrics.measure("retrieval", () => Promise.all(activePairs.map(async ({ mediaType, variant }) => {
+    // Bounded concurrent query pool avoiding the all-queries barrier
+    const queryResults = await metrics.measure("retrieval", () => asyncPool(maxConcurrency, activePairs, async ({ mediaType, variant }) => {
+      if (acceptedThisFetch.length >= neededCount && round > 0) return null;
+
       const pairKey = `${mediaType}:${variant.key}`;
       const pairContinuation = state.upstreamContinuations[pairKey] || { offset: 0, continuation: null };
       const sources = FEED_MEDIA_TYPE_SOURCES[mediaType];
       const sourceId = sources[0];
 
-      return {
-        mediaType,
-        variant,
-        pairKey,
-        candidates: await queryLiveConnectors(variant.query, {
-          limit: EVALUATION_BATCH_SIZE,
-          offset: pairContinuation.offset,
-          continuations: pairContinuation.continuation ? { [sourceId]: pairContinuation.continuation } : {},
-          mediaType: FEED_MEDIA_TYPE_KINDS[mediaType],
-          sources,
-          allowFixtureFallback: false,
-          originalQuery: term,
-          metrics,
-          signal,
-          deadline,
-          searchContext: {
-            strategy: variant.strategy,
-            variantKey: variant.key,
-            entity: plans[mediaType].entity
-          }
-        })
-      };
-    })));
+      const candidates = await queryLiveConnectors(variant.query, {
+        limit: retrievalLimit,
+        offset: pairContinuation.offset,
+        continuations: pairContinuation.continuation ? { [sourceId]: pairContinuation.continuation } : {},
+        mediaType: FEED_MEDIA_TYPE_KINDS[mediaType],
+        sources,
+        allowFixtureFallback: false,
+        originalQuery: term,
+        metrics,
+        signal,
+        deadline,
+        skipCache: options.skipCache,
+        searchContext: {
+          strategy: variant.strategy,
+          variantKey: variant.key,
+          entity: plans[mediaType]?.entity
+        }
+      });
 
-    const freshCandidates = responses.flatMap(({ pairKey, candidates }) => {
+      return { mediaType, variant, pairKey, candidates };
+    }));
+
+    const rawCandidates = [];
+    for (const res of queryResults) {
+      if (!res) continue;
+      const { mediaType, pairKey, candidates } = res;
+
       if (!state.upstreamContinuations[pairKey]) {
         state.upstreamContinuations[pairKey] = { offset: 0, continuation: null };
       }
@@ -161,47 +225,98 @@ async function fetchPassingSearchResults({
       }
 
       const hasFailure = candidates.failures?.length > 0 || candidates.batches?.some((b) => b.status === "failed");
+      const hasContinuation = Boolean(firstBatch?.continuation);
       const isExhausted = candidates.exhausted || (candidates.batches?.length > 0 && candidates.batches.every((b) => b.exhausted));
 
       if (isExhausted && !hasFailure) {
         exhaustedPairsSet.add(pairKey);
-      } else if (candidates.length < EVALUATION_BATCH_SIZE && !hasFailure) {
+      } else if (candidates.length < retrievalLimit && !hasContinuation && !hasFailure) {
         exhaustedPairsSet.add(pairKey);
       }
 
-      return candidates.filter((candidate) => {
-        if (!candidate?.id) { metrics.increment("invalidCandidates"); return false; }
-        if (seenIdsSet.has(candidate.id) || deliveredIdsSet.has(candidate.id)) {
-          metrics.increment("duplicates");
-          return false;
-        }
-        seenIdsSet.add(candidate.id);
-        if (!state.seenIds.includes(candidate.id)) {
-          state.seenIds.push(candidate.id);
-        }
-        return true;
-      });
-    });
+      if (candidates.length === 0 && !hasFailure) {
+        state.mediaTypeAttempts[mediaType] = (state.mediaTypeAttempts[mediaType] || 0) + 1;
+      }
+
+      rawCandidates.push(...candidates);
+    }
 
     state.exhaustedPairs = Array.from(exhaustedPairsSet);
 
-    if (!freshCandidates.length) continue;
+    // Deduplicate by stable source identity + canonical clustering BEFORE AI calls
+    const uniqueCandidates = [];
+    const seenClusterKeys = new Set();
+
+    for (const candidate of rawCandidates) {
+      if (!candidate?.id) {
+        metrics.increment("invalidCandidates");
+        continue;
+      }
+      if (seenIdsSet.has(candidate.id) || deliveredIdsSet.has(candidate.id)) {
+        metrics.increment("duplicates");
+        continue;
+      }
+
+      const clusterKey = canonicalClusterKey(candidate);
+      if (seenClusterKeys.has(clusterKey)) {
+        metrics.increment("duplicates");
+        continue;
+      }
+      seenClusterKeys.add(clusterKey);
+
+      seenIdsSet.add(candidate.id);
+      if (!state.seenIds.includes(candidate.id)) {
+        state.seenIds.push(candidate.id);
+      }
+
+      // Check session candidateCache first
+      if (state.candidateCache?.[candidate.id]) {
+        const cached = state.candidateCache[candidate.id];
+        metrics.increment("cacheHits");
+        if (cached.accepted) {
+          candidate.decision = { ...cached, pass: true };
+          candidate.ranking = { ...(candidate.ranking || {}), relevanceProbability: cached.probability };
+          const mType = mediaTypes.find((type) => candidateMatchesMediaType(candidate, type));
+          if (mType && acceptedThisFetch.length < neededCount) {
+            acceptedThisFetch.push(candidate);
+            metrics.increment("retained");
+          } else {
+            state.pendingAccepted.push(candidate);
+            metrics.increment("retained");
+            metrics.increment("pending");
+          }
+        }
+        continue;
+      }
+
+      uniqueCandidates.push(candidate);
+    }
+
+    if (!uniqueCandidates.length) {
+      if (state.activeStage < 2 && acceptedThisFetch.length < neededCount) {
+        state.activeStage = 2;
+      }
+      continue;
+    }
 
     progress(onProgress, {
       phase: "evaluating",
       label: "Checking relevance with OpenScroll's evaluator",
-      detail: `Evaluating ${freshCandidates.length} new candidates`
+      detail: `Evaluating ${uniqueCandidates.length} new candidates`
     });
-    metrics.capture(freshCandidates);
-    const evaluation = await metrics.measure("evaluation", () => evaluateFeedCandidates(term, freshCandidates, {
+
+    metrics.capture(uniqueCandidates);
+    const evaluation = await metrics.measure("evaluation", () => evaluateFeedCandidates(term, uniqueCandidates, {
       metrics,
       topicMeaning: state.topicMeaning,
       evalConfig: state.evalConfig,
       signal,
-      deadline
+      deadline,
+      skipCache: options.skipCache
     }));
+
     const unevaluatedCount = evaluation.unevaluated?.length || 0;
-    const evaluatedTotal = freshCandidates.length - unevaluatedCount;
+    const evaluatedTotal = uniqueCandidates.length - unevaluatedCount;
     metrics.increment("evaluated", evaluatedTotal);
     metrics.increment("accepted", evaluation.accepted.length);
     metrics.increment("rejected", Math.max(0, evaluatedTotal - evaluation.accepted.length));
@@ -224,17 +339,15 @@ async function fetchPassingSearchResults({
         acceptedThisFetch.push(candidate);
         metrics.increment("retained");
       } else {
-        // OVERFLOW IS PRESERVED IN pendingAccepted, NEVER DROPPED!
         state.pendingAccepted.push(candidate);
         metrics.increment("retained");
         metrics.increment("pending");
       }
     }
 
-    // Cache definitively rejected candidates; leave unevaluated retryable
     for (const ev of (evaluation.evaluations || [])) {
       if (ev && !ev.unevaluated && !ev.accepted) {
-        const candidate = freshCandidates[ev.candidateIndex];
+        const candidate = uniqueCandidates[ev.candidateIndex];
         if (candidate?.id && !state.candidateCache[candidate.id]) {
           state.candidateCache[candidate.id] = {
             accepted: false,
@@ -244,6 +357,10 @@ async function fetchPassingSearchResults({
           };
         }
       }
+    }
+
+    if (acceptedThisFetch.length < neededCount && state.activeStage < 2) {
+      state.activeStage = 2;
     }
 
     progress(onProgress, {
@@ -260,7 +377,7 @@ export async function composeSearchFeed(body = {}, options = {}) {
   const { onProgress, onMetrics, onCandidates, signal, deadline } = options;
   const metrics = createFeedMetrics({ onCandidates });
   try {
-    const result = await composeMeasuredSearchFeed(body, { onProgress, metrics, signal, deadline, store: options.store });
+    const result = await composeMeasuredSearchFeed(body, { ...options, onProgress, metrics, signal, deadline, store: options.store });
     reportFeedMetrics(onMetrics, metrics, "ok");
     return result;
   } catch (error) {
@@ -270,7 +387,8 @@ export async function composeSearchFeed(body = {}, options = {}) {
   }
 }
 
-async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics, signal, deadline, store: customStore }) {
+async function composeMeasuredSearchFeed(body = {}, options = {}) {
+  const { onProgress, metrics, signal, deadline, store: customStore, ...extraOptions } = options;
   validateFeedRequest(body);
 
   const {
@@ -359,7 +477,12 @@ async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics, signa
         entity: entity ? { label: entity.label, aliases: entity.aliases } : null,
         variants: Object.fromEntries(Object.entries(plans).map(([type, plan]) => [
           type,
-          plan.variants.map((variant) => ({ key: variant.key, query: variant.query, strategy: variant.strategy }))
+          plan.variants.map((variant) => ({
+            key: variant.key,
+            query: variant.query,
+            strategy: variant.strategy,
+            stage: variant.stage || 1
+          }))
         ]))
       }
     });
@@ -439,6 +562,22 @@ async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics, signa
   // 2. Refill toward requested visible page size if needed
   const neededCount = requestedPageSize - batchCandidates.length;
 
+  const effectiveRetrievalBatchSize = Number.isInteger(body.retrievalBatchSize) && body.retrievalBatchSize > 0
+    ? body.retrievalBatchSize
+    : (Number.isInteger(extraOptions.retrievalBatchSize) && extraOptions.retrievalBatchSize > 0 ? extraOptions.retrievalBatchSize : undefined);
+
+  const effectiveMaxRounds = Number.isInteger(body.maxRounds) && body.maxRounds > 0
+    ? body.maxRounds
+    : (Number.isInteger(extraOptions.maxRounds) && extraOptions.maxRounds > 0 ? extraOptions.maxRounds : undefined);
+
+  const effectiveMaxCandidates = Number.isInteger(body.maxCandidates) && body.maxCandidates > 0
+    ? body.maxCandidates
+    : (Number.isInteger(extraOptions.maxCandidates) && extraOptions.maxCandidates > 0 ? extraOptions.maxCandidates : undefined);
+
+  const effectiveMaxConcurrency = Number.isInteger(body.maxConcurrency) && body.maxConcurrency > 0
+    ? body.maxConcurrency
+    : (Number.isInteger(extraOptions.maxConcurrency) && extraOptions.maxConcurrency > 0 ? extraOptions.maxConcurrency : undefined);
+
   if (neededCount > 0 && (!state.exhaustedPairs || state.exhaustedPairs.length < totalPairs)) {
     const searchResult = await fetchPassingSearchResults({
       term: state.query,
@@ -449,7 +588,14 @@ async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics, signa
       onProgress,
       metrics,
       signal,
-      deadline
+      deadline,
+      options: {
+        ...extraOptions,
+        retrievalBatchSize: effectiveRetrievalBatchSize,
+        maxRounds: effectiveMaxRounds,
+        maxCandidates: effectiveMaxCandidates,
+        maxConcurrency: effectiveMaxConcurrency
+      }
     });
 
     batchCandidates.push(...searchResult.acceptedThisFetch);
@@ -518,6 +664,8 @@ async function composeMeasuredSearchFeed(body = {}, { onProgress, metrics, signa
     mediaTypes: selectedMediaTypes,
     sourceOffsets: { [state.query]: formatOffsets(state.upstreamContinuations, selectedMediaTypes, state.searchPlan) },
     sourceHasMore: !state.exhausted,
+    exhausted: Boolean(state.exhausted),
+    pendingAcceptedCount: state.pendingAccepted.length,
     searchPlan: state.searchPlan
   };
 

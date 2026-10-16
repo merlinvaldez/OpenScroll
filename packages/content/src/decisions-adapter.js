@@ -176,20 +176,66 @@ export async function evaluateFeedCandidates(term, candidates, options = {}) {
   });
 }
 
+import { relevanceDecisionsCache, computeDecisionCacheKey } from "./shared-cache.js";
+
 async function evaluateDecisionsBatch(term, candidates, options = {}) {
   const { apiKey, model, threshold, startIndex = 0 } = options;
   const budget = getRequestBudgetConfig();
 
-  const prepared = candidates.map((candidate, localIdx) =>
-    buildDecisionCandidateQuestion(candidate, startIndex + localIdx, term)
+  const evaluationsByLocalIndex = new Array(candidates.length);
+  const uncachedIndices = [];
+  const cacheKeys = new Array(candidates.length);
+
+  for (let localIdx = 0; localIdx < candidates.length; localIdx += 1) {
+    const candidate = candidates[localIdx];
+    const cacheKey = computeDecisionCacheKey({
+      term,
+      topicMeaning: options.topicMeaning || options.entity,
+      model,
+      promptVersion: DECISIONS_PROMPT_VERSION,
+      threshold,
+      candidate
+    });
+    cacheKeys[localIdx] = cacheKey;
+
+    if (!options.skipCache && relevanceDecisionsCache.has(cacheKey)) {
+      const cached = relevanceDecisionsCache.get(cacheKey);
+      evaluationsByLocalIndex[localIdx] = cached;
+      candidate.decision = cached;
+      candidate.sourceEvidence = cached.sourceEvidence;
+      candidate.ranking = {
+        ...(candidate.ranking || {}),
+        relevanceProbability: cached.probability
+      };
+      options.metrics?.increment("cacheHits");
+    } else {
+      uncachedIndices.push(localIdx);
+    }
+  }
+
+  // If every candidate in this batch was resolved from shared cache, return immediately without AI call
+  if (!uncachedIndices.length) {
+    const accepted = candidates.filter((_, idx) => evaluationsByLocalIndex[idx]?.accepted === true);
+    return {
+      accepted,
+      evaluations: evaluationsByLocalIndex,
+      unevaluated: [],
+      partialFailures: false
+    };
+  }
+
+  const prepared = uncachedIndices.map((localIdx, qIdx) =>
+    buildDecisionCandidateQuestion(candidates[localIdx], startIndex + qIdx, term)
   );
 
   const questions = prepared.map((p) => p.question);
   const questionMap = new Map();
-  prepared.forEach((p, localIdx) => {
+  prepared.forEach((p, qIdx) => {
+    const localIdx = uncachedIndices[qIdx];
     questionMap.set(p.questionName, {
       candidate: candidates[localIdx],
-      candidateIndex: p.candidateIndex,
+      candidateIndex: startIndex + localIdx,
+      localIdx,
       sourceEvidence: p.sourceEvidence
     });
   });
@@ -239,7 +285,6 @@ async function evaluateDecisionsBatch(term, candidates, options = {}) {
 
   const answers = payload.answers;
   const seenQuestionNames = new Set();
-  const evaluationsByLocalIndex = new Array(candidates.length);
   const unevaluated = [];
   let partialFailures = false;
 
@@ -354,6 +399,11 @@ async function evaluateDecisionsBatch(term, candidates, options = {}) {
 
     evaluationsByLocalIndex[localIdx] = evalRecord;
 
+    // Cache definitive evaluation in shared relevance decisions cache
+    if (!options.skipCache && cacheKeys[localIdx]) {
+      relevanceDecisionsCache.set(cacheKeys[localIdx], evalRecord);
+    }
+
     // Attach decision and ranking relevance probability to candidate
     candidate.decision = evalRecord;
     candidate.sourceEvidence = sourceEvidence;
@@ -364,11 +414,12 @@ async function evaluateDecisionsBatch(term, candidates, options = {}) {
   }
 
   // Handle missing answers for any question that was not answered
-  for (let localIdx = 0; localIdx < candidates.length; localIdx += 1) {
+  for (let qIdx = 0; qIdx < uncachedIndices.length; qIdx += 1) {
+    const localIdx = uncachedIndices[qIdx];
     if (!evaluationsByLocalIndex[localIdx]) {
       partialFailures = true;
       const candidate = candidates[localIdx];
-      const p = prepared[localIdx];
+      const p = prepared[qIdx];
       const provenance = {
         decisionVersion: DECISION_VERSION,
         model,

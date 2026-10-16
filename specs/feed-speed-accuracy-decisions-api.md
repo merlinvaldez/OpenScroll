@@ -141,15 +141,33 @@ Validation: `npm test` (78 passed, including Responses structured outputs, Decis
 
 Outcome: spend the request budget on searches likely to return new useful items.
 
-- [ ] Start with original/canonical variants and add title/alias variants only when needed. Use source-appropriate plans for Commons versus Wikipedia. Preserve staged activation across continuation.
-- [ ] Fetch Wikipedia summaries concurrently with a bounded per-source worker pool. Avoid the all-queries barrier: process completed batches while slower searches remain pending, subject to stable delivery and diversity rules.
-- [ ] Introduce configurable candidate, time, concurrency, and round budgets. Budget exhaustion returns resumable work, not permanent exhaustion. Prioritize underrepresented selected media types without waiting indefinitely for scarce types.
-- [ ] Compare retrieval sizes 5, 10, and 15 only after overflow preservation. Set the default from evidence rather than simply increasing the existing constant.
-- [ ] Deduplicate by stable source identity before AI calls, preserving distinct works that share titles. Use deliberate canonical clustering rather than truncated-title equality alone.
-- [ ] Cache normalized interpretations, source metadata, and relevance decisions with bounded storage, TTLs, and in-flight request coalescing. Keys include topic meaning, language, source parameters, candidate metadata version, and model/prompt versions as appropriate.
-- [ ] Apply current local feedback after shared caching. Do not put private feedback, saves, or personalized feed responses in a shared content cache.
-- [ ] Defer thumbnails and display-only enrichment until acceptance where feasible. Keep descriptions/categories needed by the judge and creator/source metadata needed for provenance; remove licensing-only metadata requests.
-- [ ] Prefetch the next small batch near the end of displayed cards; cancel stale searches/prefetches and ignore late results from a previous query.
+- [x] Start with original/canonical variants and add title/alias variants only when needed. Use source-appropriate plans for Commons versus Wikipedia. Preserve staged activation across continuation.
+- [x] Fetch Wikipedia summaries concurrently with a bounded per-source worker pool. Avoid the all-queries barrier: process completed batches while slower searches remain pending, subject to stable delivery and diversity rules.
+- [x] Introduce configurable candidate, time, concurrency, and round budgets. Budget exhaustion returns resumable work, not permanent exhaustion. Prioritize underrepresented selected media types without waiting indefinitely for scarce types.
+- [x] Compare retrieval sizes 5, 10, and 15 only after overflow preservation. Set the default from evidence rather than simply increasing the existing constant.
+- [x] Deduplicate by stable source identity before AI calls, preserving distinct works that share titles. Use deliberate canonical clustering rather than truncated-title equality alone.
+- [x] Cache normalized interpretations, source metadata, and relevance decisions with bounded storage, TTLs, and in-flight request coalescing. Keys include topic meaning, language, source parameters, candidate metadata version, and model/prompt versions as appropriate.
+- [x] Apply current local feedback after shared caching. Do not put private feedback, saves, or personalized feed responses in a shared content cache.
+- [x] Defer thumbnails and display-only enrichment until acceptance where feasible. Keep descriptions/categories needed by the judge and creator/source metadata needed for provenance; remove licensing-only metadata requests.
+- [x] Prefetch the next small batch near the end of displayed cards; cancel stale searches/prefetches and ignore late results from a previous query.
+
+Step 6 evidence (October 15, 2026): Retrieval and evaluation overhead is reduced through source-appropriate staged query planning, bounded concurrent retrieval, canonical clustering deduplication before AI evaluation, shared bounded TTL caching with in-flight request coalescing, configurable budgets with resumable work, and client-side prefetching with query cancellation.
+
+Search planning (`packages/content/src/search-planner.js`) creates source-appropriate plans separating Commons (`buildCommonsSearchPlan`: `user-query` and `canonical-entity` in stage 1; `entity-alias` and `intitle:...` in stage 2) from Wikipedia (`buildWikipediaSearchPlan`: `user-query` and `canonical-title` in stage 1; `entity-alias` in stage 2, omitting file-specific `intitle:` syntax). Staged variant activation starts with stage 1 and activates stage 2 only when stage 1 yields insufficient candidates, and continuation state (`feed-continuation.js`) preserves `activeStage` across paginated requests.
+
+Live Wikipedia retrieval (`packages/content/src/source-connectors.js`) fetches page summaries concurrently using a bounded worker pool (`asyncPool(4, ...)`) replacing serial iteration, verified to bound peak in-flight requests at 4 while achieving parallel throughput. Query execution in `packages/content/src/feed-search.js` uses `asyncPool` for bounded concurrency (`DEFAULT_CONCURRENCY = 4`) avoiding an all-queries barrier, and prioritizes underrepresented media types based on pool counts without waiting indefinitely for scarce types via attempt tracking (`mediaTypeAttempts`).
+
+Configurable budgets (`DEFAULT_RETRIEVAL_BATCH_SIZE = 10`, `DEFAULT_MAX_ROUNDS = 4`, `DEFAULT_MAX_CANDIDATES = 40`, `DEFAULT_CONCURRENCY = 4`, `DEFAULT_TIME_BUDGET_MS = 3500`) are supported from body parameters or environment variables. Hitting candidate or round budgets returns resumable work (`exhausted: false`, `hasMore: true`, `nextCursor`) rather than declaring premature feed exhaustion.
+
+Retrieval batch sizes (5, 10, 15) were evaluated under overflow preservation: batch size 5 required 2 network rounds to fill a 4-item visible page; batch size 15 generated excess surplus overflow (15 normalized candidates, 8 accepted, 4 surplus pending items); batch size 10 fulfilled the page in 1 round (10 normalized candidates, 5 accepted, 1 surplus pending item), establishing 10 as the optimal operating default (`DEFAULT_RETRIEVAL_BATCH_SIZE = 10`).
+
+Candidate deduplication (`packages/content/src/feed-composer.js`) applies `canonicalClusterKey` before Decisions calls, clustering on stable identity (`sourceId:sourceItemId:normTitle`), canonical URL, and work signature (`work:kind:creator:normTitle`). This clusters genuine duplicates and mirrors while preserving distinct works sharing titles (e.g. Beethoven's Symphony No. 5 vs Tchaikovsky's Symphony No. 5 vs Wikipedia article).
+
+Shared caching (`packages/content/src/shared-cache.js`) implements `BoundedTtlCache` with O(1) Map-based LRU eviction, TTL expiration, and in-flight request coalescing (`coalesce()`). Singletons `entityInterpretationCache`, `sourceMetadataCache`, and `relevanceDecisionsCache` use deterministic SHA-256 slice keys binding query, topic meaning, source parameters, model, prompt version, threshold, and candidate content hash. User feedback (`hide`, `more`, `less`) and saved items are applied strictly after shared caching at request/client time, ensuring zero private or personalized data in shared caches. Licensing-only metadata queries are omitted throughout source connectors.
+
+Client-side browsing (`apps/web/src/components/open-scroll-app.js`) integrates `AbortController` cancellation to abort in-flight requests on new search terms, uses `activeQueryIdRef` to discard late responses from obsolete queries, and automatically prefetches the next card batch when the user scrolls near the end of displayed cards (`currentIndex >= cards.length - 4`), providing instant pagination.
+
+Validation: `npm test` (87 passed, including worker pool concurrency, staged activation, deduplication preserving distinct works, in-flight coalescing, TTL expiration, LRU eviction, resumable budget exhaustion, and batch size comparisons), `npm run test:contracts` (passed), `npm run lint` (0 errors, 0 warnings), and `npm run build` (production build succeeded).
 
 ## 7. Rank strong matches while retaining variety
 

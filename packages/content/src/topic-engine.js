@@ -172,19 +172,35 @@ Each category must contain 3 to 5 specific, real, accurate, deeply relevant topi
   }, { ...options, apiKey, model });
 }
 
+import { entityInterpretationCache, computeEntityCacheKey } from "./shared-cache.js";
+
 export async function resolveEntity(query, options = {}) {
   const cleanQuery = cleanString(query, 120);
   if (!cleanQuery) return null;
 
-  const entity = await requestOpenAIStructuredOutput({
-    name: "entity_resolution",
-    instructions: "You are a precise entity-resolution engine. Resolve the provided concept into its canonical knowledge entity with label, engaging description, and alternative names.",
-    input: `Resolve the concept "${cleanQuery}" into its canonical knowledge entity.`,
-    schema: ENTITY_SCHEMA,
-    reasoningEffort: options.reasoningEffort ?? "none"
-  }, options);
+  const cacheKey = computeEntityCacheKey(cleanQuery, options.locale || "en");
+  if (!options.skipCache && entityInterpretationCache.has(cacheKey)) {
+    options.metrics?.increment("cacheHits");
+    return entityInterpretationCache.get(cacheKey);
+  }
 
-  return deepFreeze(validateEntity(entity));
+  const fetcher = async () => {
+    const entity = await requestOpenAIStructuredOutput({
+      name: "entity_resolution",
+      instructions: "You are a precise entity-resolution engine. Resolve the provided concept into its canonical knowledge entity with label, engaging description, and alternative names.",
+      input: `Resolve the concept "${cleanQuery}" into its canonical knowledge entity.`,
+      schema: ENTITY_SCHEMA,
+      reasoningEffort: options.reasoningEffort ?? "none"
+    }, options);
+
+    return deepFreeze(validateEntity(entity));
+  };
+
+  if (options.skipCache) {
+    return fetcher();
+  }
+
+  return entityInterpretationCache.coalesce(cacheKey, fetcher);
 }
 
 export async function expandTopics(query, options = {}) {

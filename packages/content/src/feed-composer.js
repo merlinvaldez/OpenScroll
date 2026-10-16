@@ -49,14 +49,42 @@ function interleaveMediaKinds(items, random) {
   return mixed;
 }
 
+function normalizeClusterTitle(title) {
+  return cleanString(title, 120).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function canonicalClusterKey(candidate) {
+  if (!candidate || typeof candidate !== "object") return "invalid";
+  const sourceId = candidate.source?.id || candidate.sourceId || "";
+  const sourceItemId = candidate.identity?.sourceItemId || candidate.sourceItemId;
+  const canonicalUrl = candidate.canonicalUrl || candidate.sourceUrl;
+  const kind = mediaKind(candidate);
+  const creator = cleanString(candidate.creators?.[0]?.name, 80).toLowerCase();
+  const rawTitle = candidate.content?.title || candidate.title || "";
+  const normTitle = normalizeClusterTitle(rawTitle);
+
+  // Work clustering: same media kind + same creator + matching title represents a duplicate work
+  if (creator && normTitle) {
+    return `work:${kind}:${creator}:${normTitle}`;
+  }
+
+  // Exact source item match with matching title
+  if (sourceId && sourceItemId && normTitle) {
+    return `item:${sourceId}:${sourceItemId}:${normTitle}`;
+  }
+
+  if (canonicalUrl && normTitle) {
+    return `url:${canonicalUrl}:${normTitle}`;
+  }
+
+  return `id:${candidate.id || normTitle || "unknown"}`;
+}
+
 export function deduplicateCandidates(candidates) {
   const clusters = new Map();
 
   for (const candidate of candidates) {
-    const titleKey = cleanString(candidate.content?.title || candidate.title, 80).toLowerCase();
-    const sourceItemId = candidate.identity?.sourceItemId || candidate.id;
-    const clusterKey = titleKey || `${candidate.source?.id || candidate.sourceId}:${sourceItemId}`;
-
+    const clusterKey = canonicalClusterKey(candidate);
     if (!clusters.has(clusterKey)) {
       clusters.set(clusterKey, [candidate]);
     } else {

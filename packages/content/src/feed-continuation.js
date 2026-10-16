@@ -193,6 +193,8 @@ export function createFeedContinuationState({
     candidateCache: {},
     deliveredBatches: {},
     currentSeq: 0,
+    activeStage: 1,
+    mediaTypeAttempts: {},
     exhausted: false,
     createdAt: now,
     updatedAt: now,

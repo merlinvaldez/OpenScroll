@@ -102,6 +102,7 @@ test("composed feed uses expanded Commons variants, main evaluator, and progress
     assert.equal(Object.hasOwn(result, "metrics"), false);
     let reusedMetrics;
     const repeated = await composeSearchFeed({ interest: "Gnawa music Morocco", mediaTypes: ["images"], pageSize: 1, seed: 1, searchPlan: result.searchPlan }, {
+      skipCache: true,
       onMetrics: (value) => { reusedMetrics = value; },
       onCandidates: () => { throw new Error("diagnostic callback failed"); }
     });

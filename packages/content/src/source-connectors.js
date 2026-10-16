@@ -12,12 +12,37 @@ import {
   parseRetryAfter
 } from "./source-batch.js";
 
+import { sourceMetadataCache } from "./shared-cache.js";
+
 const USER_AGENT = "OpenScroll/1.0 (https://github.com/merlinvaldez/OpenScroll; open-knowledge-client)";
+
+export async function asyncPool(concurrency, items, asyncFn) {
+  const results = new Array(items.length);
+  const poolLimit = Math.max(1, Math.min(concurrency, items.length));
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await asyncFn(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workers = Array.from({ length: poolLimit }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
 
 // Typed source request: per-attempt timeout through body reading, bounded
 // retries, caller abort signal, and the overall request deadline.
 function sourceJson(url, options = {}, inspect) {
-  return fetchJsonWithRetry(url, {
+  const cacheKey = `source:${url}`;
+  if (!options.skipCache && sourceMetadataCache.has(cacheKey)) {
+    options.metrics?.increment("cacheHits");
+    return sourceMetadataCache.get(cacheKey);
+  }
+
+  const fetcher = () => fetchJsonWithRetry(url, {
     signal: options.signal,
     deadline: options.deadline,
     timeoutMs: options.timeoutMs,
@@ -28,6 +53,12 @@ function sourceJson(url, options = {}, inspect) {
     onAttempt: () => options.metrics?.increment("sourceCalls"),
     onRetry: () => options.metrics?.increment("sourceRetries")
   });
+
+  if (options.skipCache) {
+    return fetcher();
+  }
+
+  return sourceMetadataCache.coalesce(cacheKey, fetcher);
 }
 
 // Used only by single-item lookups (article reader) where "not loaded" is the only outcome.
@@ -151,19 +182,20 @@ export async function searchWikipediaLive(query, limit = 8, options = {}) {
     const hits = searchData.query.search;
     options.metrics?.increment("rawResults", hits.length);
 
-    const records = [];
-    for (const item of hits) {
+    const fetched = await asyncPool(4, hits, async (item) => {
       const pageUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(item.title)}`;
-      let pageData;
       try {
-        pageData = await sourceJson(pageUrl, options);
+        const pageData = await sourceJson(pageUrl, options);
+        if (pageData?.type === "standard") return createWikipediaRecord(pageData);
+        return null;
       } catch (error) {
         // A page deleted since indexing is filtered; any other failure fails the batch so its position stays retryable.
-        if (error?.status === 404) continue;
+        if (error?.status === 404) return null;
         throw error;
       }
-      if (pageData?.type === "standard") records.push(createWikipediaRecord(pageData));
-    }
+    });
+
+    const records = fetched.filter(Boolean);
 
     const { items, invalid } = normalizeSourceRecords(records, options);
     const continuation = sanitizeMediaWikiContinuation(searchData.continue);
@@ -279,6 +311,37 @@ function retrievalScore(query, title, description, categories) {
   return Math.min(1, 0.45 + (matchedTerms.length / queryTerms.length) * 0.35 + (titleMatches.length / queryTerms.length) * 0.2);
 }
 
+function selectPlayableVideoSources(derivatives = [], originalUrl = "", originalMime = "") {
+  if (!Array.isArray(derivatives) || !derivatives.length) {
+    return {
+      primaryUrl: originalUrl,
+      sources: originalUrl ? [{ src: originalUrl, type: originalMime || "video/webm" }] : []
+    };
+  }
+
+  // Filter out theora/ogg unless no other format exists
+  const nonTheora = derivatives.filter((d) => d && typeof d.src === "string" && !d.type?.toLowerCase().includes("theora"));
+  const pool = nonTheora.length ? nonTheora : derivatives;
+
+  // Prefer 480p, then 720p, then 360p, then 240p, then 1080p
+  const preferenceOrder = ["480p", "720p", "360p", "240p", "1080p"];
+  let best = pool.find((d) => d.transcodekey && preferenceOrder.some((res) => d.transcodekey.includes(res)));
+  if (!best) best = pool[0];
+
+  const sources = pool.map((d) => ({
+    src: d.src,
+    type: d.type || (d.src.endsWith(".webm") ? "video/webm" : d.src.endsWith(".mov") || d.src.endsWith(".mp4") ? "video/mp4" : undefined),
+    width: d.width || null,
+    height: d.height || null,
+    transcodekey: d.transcodekey || null
+  }));
+
+  return {
+    primaryUrl: best?.src || originalUrl,
+    sources
+  };
+}
+
 export async function searchCommonsLive(query, limit = 12, options = {}) {
   const mediaTypeFilter = COMMONS_MEDIA_TYPE_FILTERS[options.mediaType] || "";
   const searchQuery = [cleanString(query, 100), mediaTypeFilter].filter(Boolean).join(" ");
@@ -287,7 +350,7 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
   const contParams = new URLSearchParams();
   applyContinuation(contParams, requestContinuation);
   const contQuery = contParams.toString() ? `&${contParams.toString()}` : "";
-  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${contQuery}&prop=imageinfo&iiprop=url|size|extmetadata|mime|mediatype&iiextmetadatafilter=Artist|ImageDescription|Categories|ObjectName|DateTimeOriginal|Assessments&iiurlwidth=640&format=json&origin=*`;
+  const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${cleanQ}&gsrnamespace=6&gsrlimit=${limit}${contQuery}&prop=imageinfo|videoinfo&iiprop=url|size|extmetadata|mime|mediatype&viprop=derivatives&iiextmetadatafilter=Artist|ImageDescription|Categories|ObjectName|DateTimeOriginal|Assessments&iiurlwidth=640&format=json&origin=*`;
 
   let data;
   try {
@@ -331,6 +394,11 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
     const categories = metadataList(meta.Categories?.value);
     const retrievalMatch = retrievalScore(query, title, desc, categories);
 
+    const videoDerivatives = page?.videoinfo?.[0]?.derivatives || [];
+    const { primaryUrl, sources: videoSources } = kind === "video"
+      ? selectPlayableVideoSources(videoDerivatives, info.url, mime)
+      : { primaryUrl: info.url, sources: [] };
+
     const ucoItem = {
       id: `wikimedia-commons:${page.pageid}`,
       sourceId: "wikimedia-commons",
@@ -360,15 +428,18 @@ export async function searchCommonsLive(query, limit = 12, options = {}) {
       },
       media: {
         kind,
-        url: info.url,
+        url: primaryUrl,
         thumbnailUrl: info.thumburl || null,
         width: info.width || 1200,
         height: info.height || 800,
-        mime,
+        mime: kind === "video" && primaryUrl !== info.url
+          ? (primaryUrl.endsWith(".webm") ? "video/webm" : "video/mp4")
+          : mime,
         durationSeconds: kind === "audio" ? 180 : null,
         accessibility: {
           altText: desc || title
-        }
+        },
+        ...(videoSources.length ? { sources: videoSources } : {})
       },
       provenance: {
         capturedAt: new Date().toISOString(),

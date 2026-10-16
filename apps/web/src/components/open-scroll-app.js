@@ -166,6 +166,10 @@ export default function OpenScrollApp() {
   const feedRef = useRef(null);
   const bottomSentinelRef = useRef(null);
   const autoplayTimerRef = useRef(null);
+  const activeAbortControllerRef = useRef(null);
+  const activeQueryIdRef = useRef(null);
+  const prefetchedBatchRef = useRef(null);
+  const isPrefetchingRef = useRef(false);
 
   const [activeCard, setActiveCard] = useState(null);
   const [activeModal, setActiveModal] = useState(null); // "branch" | "whyThis" | "whyOpen" | "viewer" | "settings"
@@ -327,10 +331,22 @@ export default function OpenScrollApp() {
     setFeedSearchPlan(null);
     setFeedExhausted(false);
 
+    // Cancel any stale searches or prefetches from a previous query
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    activeAbortControllerRef.current = abortController;
+    const queryId = crypto.randomUUID();
+    activeQueryIdRef.current = queryId;
+    prefetchedBatchRef.current = null;
+    isPrefetchingRef.current = false;
+
     try {
       const res = await fetch("/api/feed/compose", {
         method: "POST",
         headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           interest: cleanInterest,
           feedback: localState.feedback,
@@ -341,6 +357,8 @@ export default function OpenScrollApp() {
       });
 
       const payload = await readFeedResponse(res, setFeedLoadingStage);
+      // Ignore late results from a previous query
+      if (activeQueryIdRef.current !== queryId) return;
 
       const composedItems = payload?.data?.items || [];
       setFeedSearchPlan(payload?.data?.searchPlan || null);
@@ -362,16 +380,89 @@ export default function OpenScrollApp() {
 
       setCurrentView("feed");
     } catch (error) {
-      setToast(error.message);
+      if (error?.name === "AbortError") return;
+      if (activeQueryIdRef.current === queryId) {
+        setToast(error.message);
+      }
     } finally {
-      setIsLoadingFeed(false);
-      setFeedLoadingStage(null);
+      if (activeQueryIdRef.current === queryId) {
+        setIsLoadingFeed(false);
+        setFeedLoadingStage(null);
+      }
+    }
+  }
+
+  // Prefetch the next small batch near the end of displayed cards
+  async function prefetchNextBatch() {
+    if (isPrefetchingRef.current || !feedCursor || feedExhausted || isLoadingFeed || isLoadingMore) return;
+    if (prefetchedBatchRef.current) return;
+
+    isPrefetchingRef.current = true;
+    const currentQueryId = activeQueryIdRef.current;
+    const cleanInterest = interest.trim();
+
+    try {
+      const res = await fetch("/api/feed/compose", {
+        method: "POST",
+        headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
+        signal: activeAbortControllerRef.current?.signal,
+        body: JSON.stringify({
+          continuation: feedCursor,
+          cursor: feedCursor,
+          interest: cleanInterest,
+          feedback: localState.feedback,
+          pageSize: 15,
+          seed: feedSeed,
+          sourceOffsets: feedSourceOffsets,
+          mediaTypes: feedMediaTypes,
+          searchPlan: feedSearchPlan
+        })
+      });
+
+      const payload = await readFeedResponse(res, () => {});
+      if (activeQueryIdRef.current === currentQueryId && payload?.data?.items?.length) {
+        prefetchedBatchRef.current = {
+          items: payload.data.items,
+          pagination: payload.data.pagination,
+          sourceOffsets: payload.data.sourceOffsets,
+          sourceHasMore: payload.data.sourceHasMore,
+          queryId: currentQueryId
+        };
+      }
+    } catch {
+      // Prefetches fail gracefully without blocking user interaction
+    } finally {
+      isPrefetchingRef.current = false;
     }
   }
 
   // Endless Infinite Scroll Loader
   async function handleLoadMoreCards() {
     if (isLoadingFeed || isLoadingMore || currentView !== "feed" || (feedCursor === null && feedExhausted)) return;
+
+    // Fast-path: consume prefetched batch if already available for this query
+    if (prefetchedBatchRef.current && prefetchedBatchRef.current.queryId === activeQueryIdRef.current) {
+      const batch = prefetchedBatchRef.current;
+      prefetchedBatchRef.current = null;
+
+      const nextItems = batch.items || [];
+      setFeedSourceOffsets(batch.sourceOffsets || {});
+      setFeedExhausted(!nextItems.length || batch.pagination?.hasMore === false || batch.sourceHasMore === false);
+
+      if (nextItems.length) {
+        const nextCards = nextItems.map(transformUcoToCard);
+        setCards((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const uniqueNew = nextCards.filter((c) => !existingIds.has(c.id));
+          return uniqueNew.length ? [...prev, ...uniqueNew] : prev;
+        });
+        setFeedCursor(batch.pagination?.nextCursor ?? null);
+      } else {
+        setFeedCursor(null);
+      }
+      return;
+    }
+
     setIsLoadingMore(true);
     setFeedLoadingStage({
       phase: "retrieving",
@@ -379,6 +470,7 @@ export default function OpenScrollApp() {
       detail: "Looking for the next focused batch"
     });
 
+    const currentQueryId = activeQueryIdRef.current;
     try {
       const requestingNextSourceBatch = feedCursor === null;
       const nextCursor = requestingNextSourceBatch ? 0 : feedCursor;
@@ -387,6 +479,7 @@ export default function OpenScrollApp() {
       const res = await fetch("/api/feed/compose", {
         method: "POST",
         headers: { "Accept": "application/x-ndjson", "Content-Type": "application/json" },
+        signal: activeAbortControllerRef.current?.signal,
         body: JSON.stringify({
           continuation: feedCursor,
           cursor: nextCursor,
@@ -401,6 +494,7 @@ export default function OpenScrollApp() {
       });
 
       const payload = await readFeedResponse(res, setFeedLoadingStage);
+      if (activeQueryIdRef.current !== currentQueryId) return; // Ignore late results from stale query
 
       const nextItems = payload?.data?.items || [];
       setFeedSourceOffsets(payload?.data?.sourceOffsets || {});
@@ -418,6 +512,7 @@ export default function OpenScrollApp() {
         setFeedCursor(null);
       }
     } catch (error) {
+      if (error?.name === "AbortError") return;
       if (error.code === "CONTINUATION_EXPIRED" || error.status === 410) {
         setFeedCursor(null);
         setToast("Feed session expired. Tap search to restart.");
@@ -429,6 +524,15 @@ export default function OpenScrollApp() {
       setFeedLoadingStage(null);
     }
   }
+
+  // Near-end prefetch trigger when scrolling through displayed cards
+  useEffect(() => {
+    if (currentView !== "feed" || !cards.length || !visibleCardId) return;
+    const currentIndex = cards.findIndex((c) => c.id === visibleCardId);
+    if (currentIndex >= Math.max(0, cards.length - 4) && feedCursor && !feedExhausted) {
+      prefetchNextBatch();
+    }
+  }, [visibleCardId, cards.length, feedCursor, feedExhausted, currentView]);
 
   // Infinite Scroll Intersection Observer
   useEffect(() => {

@@ -72,22 +72,32 @@ export function ActionRail({ card, onWhyOpen, messages }) {
 }
 
 export function ImageCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
-  const imageUrl = card.object?.media?.url || card.downloadUrl;
+  const primaryUrl = card.object?.media?.thumbnailUrl || card.object?.media?.url || card.downloadUrl;
+  const fallbackUrl = card.object?.media?.url;
+  const [currentSrc, setCurrentSrc] = useState(primaryUrl);
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
+
+  useEffect(() => {
+    setCurrentSrc(card.object?.media?.thumbnailUrl || card.object?.media?.url || card.downloadUrl);
+  }, [card.id, card.object?.media?.thumbnailUrl, card.object?.media?.url, card.downloadUrl]);
 
   return (
     <CardFrame className="feed-card--image" showChrome={showChrome} onToggleChrome={onToggleChrome}>
       <div className="media-stage image-stage">
-        {imageUrl ? (
+        {currentSrc ? (
           <img
-            src={imageUrl}
+            src={currentSrc}
             alt={card.object?.media?.accessibility?.altText || displayTitle}
             className="stage-img"
             loading="lazy"
             onError={(e) => {
-              e.target.style.display = "none";
-              e.target.parentElement.classList.add("media-fallback-active");
+              if (fallbackUrl && currentSrc !== fallbackUrl) {
+                setCurrentSrc(fallbackUrl);
+              } else {
+                e.target.style.display = "none";
+                e.target.parentElement?.classList.add("media-fallback-active");
+              }
             }}
           />
         ) : null}
@@ -221,13 +231,14 @@ export function AudioCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
       audio.muted = false;
       try {
         await audio.play();
+        if (!audio.paused) setIsPlaying(true);
         onToggleChrome();
       } catch {
-        setMediaError(true);
         setIsPlaying(false);
       }
     } else {
       audio.pause();
+      setIsPlaying(false);
       onToggleChrome();
     }
   }
@@ -333,6 +344,7 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
   const media = card.object?.media || {};
   const videoUrl = media.url || card.downloadUrl;
   const thumbnailUrl = media.thumbnailUrl;
+  const sources = Array.isArray(media.sources) ? media.sources : [];
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
 
@@ -340,8 +352,16 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
     setIsPlaying(false);
     setMediaError(false);
     videoVisibleRef.current = false;
-    return () => videoRef.current?.pause();
-  }, [videoUrl]);
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.currentTime = 0;
+      video.load();
+    }
+    return () => {
+      videoRef.current?.pause();
+    };
+  }, [videoUrl, card.id]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -349,13 +369,11 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
 
     const playIfVisible = async () => {
       if (!videoVisibleRef.current || mediaError) return;
-      video.muted = false;
-      video.volume = 1;
+      video.muted = true;
       try {
         await video.play();
         if (!video.paused) setIsPlaying(true);
       } catch {
-        // Keep the video paused when the browser blocks audible autoplay; never start it silently.
         video.pause();
       }
     };
@@ -412,46 +430,51 @@ export function VideoCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onB
         if (!video.paused) setIsPlaying(true);
         onToggleChrome();
       } catch {
-        setMediaError(true);
-        setIsPlaying(false);
-      }
-    } else {
-      if (video.muted) {
-        video.muted = false;
-        video.volume = 1;
         try {
+          video.muted = true;
           await video.play();
           if (!video.paused) setIsPlaying(true);
+          onToggleChrome();
         } catch {
-          // A user gesture normally unlocks audio; keep the media state recoverable if it does not.
+          setIsPlaying(false);
         }
-        onToggleChrome();
-        return;
       }
+    } else {
       video.pause();
+      setIsPlaying(false);
       onToggleChrome();
     }
   }
 
   return (
     <CardFrame className={`feed-card--video ${isPlaying ? "feed-card--playing" : ""}`} showChrome={showChrome} onToggleChrome={onToggleChrome}>
-      <div className="media-stage video-stage">
+      <div className="media-stage video-stage" onClick={togglePlay}>
         <video
           ref={videoRef}
           className="stage-video"
-          src={videoUrl || undefined}
+          src={sources.length ? undefined : (videoUrl || undefined)}
           poster={thumbnailUrl || undefined}
           preload="metadata"
           playsInline
+          loop
           onClick={togglePlay}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
           onError={() => {
-            setMediaError(true);
-            setIsPlaying(false);
+            if (videoRef.current?.error) {
+              setMediaError(true);
+              setIsPlaying(false);
+            }
           }}
-        />
+        >
+          {sources.map((s, idx) => (
+            <source key={idx} src={s.src} type={s.type} />
+          ))}
+          {videoUrl && !sources.some((s) => s.src === videoUrl) ? (
+            <source src={videoUrl} type={media.mimeType || "video/mp4"} />
+          ) : null}
+        </video>
         {!isPlaying ? (
           <button
             type="button"
@@ -565,22 +588,32 @@ export function MapCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBra
 }
 
 export function MuseumCard({ card, saved, onToggleSave, onWhyThis, onWhyOpen, onBranch, messages, locale, showChrome, onToggleChrome }) {
-  const imageUrl = card.object?.media?.url || card.downloadUrl;
+  const primaryUrl = card.object?.media?.thumbnailUrl || card.object?.media?.url || card.downloadUrl;
+  const fallbackUrl = card.object?.media?.url;
+  const [currentSrc, setCurrentSrc] = useState(primaryUrl);
   const isArabic = locale === "ar";
   const displayTitle = isArabic && card.original ? card.original : card.title;
+
+  useEffect(() => {
+    setCurrentSrc(card.object?.media?.thumbnailUrl || card.object?.media?.url || card.downloadUrl);
+  }, [card.id, card.object?.media?.thumbnailUrl, card.object?.media?.url, card.downloadUrl]);
 
   return (
     <CardFrame className="feed-card--museum" showChrome={showChrome} onToggleChrome={onToggleChrome}>
       <div className="media-stage museum-stage">
-        {imageUrl ? (
+        {currentSrc ? (
           <img
-            src={imageUrl}
+            src={currentSrc}
             alt={card.object?.media?.accessibility?.altText || displayTitle}
             className="museum-img"
             loading="lazy"
             onError={(e) => {
-              e.target.style.display = "none";
-              e.target.parentElement.classList.add("media-fallback-active");
+              if (fallbackUrl && currentSrc !== fallbackUrl) {
+                setCurrentSrc(fallbackUrl);
+              } else {
+                e.target.style.display = "none";
+                e.target.parentElement?.classList.add("media-fallback-active");
+              }
             }}
           />
         ) : null}
